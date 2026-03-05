@@ -5,7 +5,7 @@
   "rewrites": [
     {
       "source": "/cpproxy/:path*",
-      "destination": "/api/proxy?proxyPath=/:path*"
+      "destination": "https://pocs.demo.amagi.tv/:path*"
     }
   ]
 }
