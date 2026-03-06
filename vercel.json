@@ -2,6 +2,14 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "framework": "vite",
+  "functions": {
+    "api/blipproxy/[...path].js": {
+      "maxDuration": 15
+    },
+    "api/blipauth/status.js": {
+      "maxDuration": 15
+    }
+  },
   "rewrites": [
     {
       "source": "/cpproxy/:path*",
@@ -9,15 +17,15 @@
     },
     {
       "source": "/blipproxy/:path*",
-      "destination": "https://pocs.demo.amagi.tv/:path*"
+      "destination": "/api/blipproxy/:path*"
+    },
+    {
+      "source": "/blipauth/status",
+      "destination": "/api/blipauth/status"
     },
     {
       "source": "/janusproxy/:path*",
       "destination": "https://pocs-trex.demo.amagi.tv/:path*"
-    },
-    {
-      "source": "/blipauth/status",
-      "destination": "/blipauth/status"
     }
   ]
 }

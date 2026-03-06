@@ -38,17 +38,22 @@ export async function apiFetch(path) {
 }
 
 /**
- * Fetch from Servo/ePub API (session managed automatically by proxy).
- * The Vite proxy handles email/password login and _blip_session renewal
- * server-side — the frontend never touches tokens or sessions.
- * The proxy also transparently retries on auth failure, so the client
- * always gets either valid JSON or a clear error.
+ * Fetch from Servo/ePub API (session managed automatically).
+ *
+ * - LOCAL (Vite dev server): the /blipproxy middleware in vite.config.js
+ *   performs Devise login and attaches _blip_session cookie server-side.
+ *   It needs x-target-base to know where to forward.
+ *
+ * - VERCEL: the /blipproxy route hits a serverless function
+ *   (api/blipproxy/[...path].js) which also handles login + session.
+ *   It does NOT need x-target-base (hardcoded in the function).
+ *
+ * Both environments handle auth failures + retries transparently.
  */
 export async function blipFetch(path) {
   const url = `/blipproxy${path}`;
   const headers = {
-    'x-target-base': CONFIG.baseUrl,
-    'x-user-token': CONFIG.token,   // Needed for Vercel (no proxy middleware there)
+    'x-target-base': CONFIG.baseUrl,   // Used by Vite proxy (ignored on Vercel)
     'Accept': 'application/json',
   };
 
