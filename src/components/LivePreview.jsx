@@ -19,13 +19,21 @@ export default function LivePreview({ wsUrl, size = 'small', autoPlay = false })
   const [errorMsg, setErrorMsg] = useState('');
   const [muted, setMuted] = useState(true);     // start muted (browser autoplay policy)
 
-  // Convert original wss://pocs-trex.demo.amagi.tv/... to local proxy ws://localhost:PORT/janusproxy/...
-  const proxyUrl = wsUrl
-    ? wsUrl.replace(
+  // Local dev: route through Vite's WebSocket proxy (/janusproxy)
+  // Production (Vercel): connect directly to Janus — WebSocket has no CORS restriction,
+  // and Vercel rewrites don't support WebSocket connections anyway.
+  const proxyUrl = (() => {
+    if (!wsUrl) return null;
+    const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    if (isLocal) {
+      return wsUrl.replace(
         /^wss?:\/\/[^/]+/,
         `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}/janusproxy`
-      )
-    : null;
+      );
+    }
+    // Production: connect directly to the Janus server (no proxy needed for WS)
+    return wsUrl;
+  })();
 
   /** Start the Janus WebRTC connection */
   const connect = useCallback(() => {
