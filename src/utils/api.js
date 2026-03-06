@@ -48,6 +48,7 @@ export async function blipFetch(path) {
   const url = `/blipproxy${path}`;
   const headers = {
     'x-target-base': CONFIG.baseUrl,
+    'x-user-token': CONFIG.token,   // Needed for Vercel (no proxy middleware there)
     'Accept': 'application/json',
   };
 

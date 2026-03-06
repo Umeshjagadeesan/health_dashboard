@@ -10,6 +10,14 @@
     {
       "source": "/blipproxy/:path*",
       "destination": "https://pocs.demo.amagi.tv/:path*"
+    },
+    {
+      "source": "/janusproxy/:path*",
+      "destination": "https://pocs-trex.demo.amagi.tv/:path*"
+    },
+    {
+      "source": "/blipauth/status",
+      "destination": "/blipauth/status"
     }
   ]
 }
