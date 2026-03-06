@@ -1,5 +1,14 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { fetchGlobalData, fetchFeedData, buildFeedIdMap } from '../utils/api';
+import {
+  fetchGlobalData,
+  fetchFeedData,
+  fetchIngestData,
+  buildFeedIdMap,
+  buildAccountIngestMap,
+  buildServoIngestMap,
+  buildEpubIngestMap,
+  getBlipAuthStatus,
+} from '../utils/api';
 
 const PREFETCH_CONCURRENCY = 3; // max parallel feed fetches
 
@@ -22,6 +31,13 @@ export function useDashboard() {
     total: 0,
     complete: true,
   });
+
+  // ── Ingest data state ──────────────────────────────────────────────
+  const [ingestData, setIngestData] = useState(null);
+  // Processed maps for quick lookup
+  const accountIngestMapRef = useRef({});  // accountName → [ingest_label]
+  const servoIngestMapRef = useRef({});    // ingest_label → servo value
+  const epubIngestMapRef = useRef({});     // ingest_label → epub value
 
   const timerRef = useRef(null);
   const selectedChannelRef = useRef(null);
@@ -109,6 +125,21 @@ export function useDashboard() {
 
     await Promise.all(workers);
     setPrefetchStatus((prev) => ({ ...prev, complete: true }));
+  }, []);
+
+  // ── Fetch ingest data (Servo + ePub) ──────────────────────────────
+  const refreshIngests = useCallback(async () => {
+    try {
+      const data = await fetchIngestData();
+      setIngestData(data);
+
+      // Build lookup maps
+      accountIngestMapRef.current = buildAccountIngestMap(data.templates);
+      servoIngestMapRef.current = buildServoIngestMap(data.servo);
+      epubIngestMapRef.current = buildEpubIngestMap(data.epub);
+    } catch (err) {
+      console.error('Failed to fetch ingest data:', err);
+    }
   }, []);
 
   // ── Fetch global data ──
@@ -223,9 +254,92 @@ export function useDashboard() {
     setChannelData(null);
   }, []);
 
-  // ── Manual refresh (global + re-prefetch all + active channel) ──
+  // ── Get ingests for a specific account ──
+  const getIngestsForAccount = useCallback((accountName) => {
+    const nameKey = (accountName || '').toLowerCase();
+    const map = accountIngestMapRef.current;
+    const servoMap = servoIngestMapRef.current;
+    const epubMap = epubIngestMapRef.current;
+
+    // Strategy 1: from ePub templates mapping
+    let labels = map[nameKey];
+    if (!labels) {
+      for (const [key, val] of Object.entries(map)) {
+        if (key.includes(nameKey) || nameKey.includes(key)) {
+          labels = val;
+          break;
+        }
+      }
+    }
+
+    // Strategy 2: match servo ingests by ingest_label containing account name
+    // or by elic_name / account reference
+    if (!labels || labels.length === 0) {
+      const matchedLabels = new Set();
+      for (const [label, servo] of Object.entries(servoMap)) {
+        const labelLower = label.toLowerCase();
+        // Match if the ingest label contains the account name or vice versa
+        if (
+          labelLower.includes(nameKey) ||
+          nameKey.includes(labelLower.replace(/[_\s-]/g, ''))
+        ) {
+          matchedLabels.add(label);
+        }
+        // Also match by elic_name
+        if (servo.elic_name && servo.elic_name.toLowerCase().includes(nameKey)) {
+          matchedLabels.add(label);
+        }
+      }
+      // Also check epub map
+      for (const [label, epub] of Object.entries(epubMap)) {
+        const labelLower = label.toLowerCase();
+        if (labelLower.includes(nameKey) || nameKey.includes(labelLower.replace(/[_\s-]/g, ''))) {
+          matchedLabels.add(label);
+        }
+        if (epub.account_domain && epub.account_domain.toLowerCase().includes(nameKey)) {
+          matchedLabels.add(label);
+        }
+      }
+      if (matchedLabels.size > 0) {
+        labels = Array.from(matchedLabels);
+      }
+    }
+
+    if (!labels || labels.length === 0) return [];
+
+    // Build combined ingest info (servo + epub)
+    return labels.map((label) => {
+      const servo = servoMap[label] || null;
+      const epub = epubMap[label] || null;
+      return { label, servo, epub };
+    });
+  }, []);
+
+  // ── Get all ingests (for the global panel) ──
+  const getAllIngests = useCallback(() => {
+    const servoMap = servoIngestMapRef.current;
+    const epubMap = epubIngestMapRef.current;
+
+    // Merge labels from both sources
+    const allLabels = new Set([
+      ...Object.keys(servoMap),
+      ...Object.keys(epubMap),
+    ]);
+
+    return Array.from(allLabels)
+      .sort()
+      .map((label) => ({
+        label,
+        servo: servoMap[label] || null,
+        epub: epubMap[label] || null,
+      }));
+  }, []);
+
+  // ── Manual refresh (global + ingests + re-prefetch all + active channel) ──
   const refresh = useCallback(async () => {
     const accts = await refreshGlobal();
+    // Fetch ingests in parallel
+    refreshIngests();
     // Re-prefetch all feeds in background
     const allChannels = accts.flatMap((a) => a.channels);
     prefetchAllFeeds(allChannels);
@@ -234,7 +348,7 @@ export function useDashboard() {
     if (selectedChannelRef.current) {
       loadChannel(selectedChannelRef.current);
     }
-  }, [refreshGlobal, loadChannel, prefetchAllFeeds]);
+  }, [refreshGlobal, refreshIngests, loadChannel, prefetchAllFeeds]);
 
   // ── Auto-refresh timer ──
   useEffect(() => {
@@ -253,6 +367,8 @@ export function useDashboard() {
   useEffect(() => {
     (async () => {
       const accts = await refreshGlobal();
+      // Fetch ingests in parallel
+      refreshIngests();
       // Once we know all channels, prefetch them all in background
       const allChannels = accts.flatMap((a) => a.channels);
       prefetchAllFeeds(allChannels);
@@ -263,6 +379,20 @@ export function useDashboard() {
   // ── Helper: check if a channel has cached data ──
   const isFeedCached = useCallback((feedCode) => {
     return !!feedCacheRef.current[feedCode];
+  }, []);
+
+  // ── Blip auth status (from proxy) ──
+  const [blipAuthStatus, setBlipAuthStatus] = useState({ hasSession: false });
+
+  // Check blip auth status on load and every 5 minutes (no need to poll fast)
+  useEffect(() => {
+    const checkStatus = async () => {
+      const status = await getBlipAuthStatus();
+      setBlipAuthStatus(status);
+    };
+    checkStatus();
+    const interval = setInterval(checkStatus, 300_000); // 5 min
+    return () => clearInterval(interval);
   }, []);
 
   return {
@@ -280,6 +410,10 @@ export function useDashboard() {
     prefetchStatus,
     isFeedCached,
     getNumericId,
+    ingestData,
+    getIngestsForAccount,
+    getAllIngests,
+    blipAuthStatus,
     refresh,
     openAccount,
     selectChannel,

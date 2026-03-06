@@ -8,6 +8,7 @@ import StorageCard from './StorageCard';
 // import LiveEventsCard from './LiveEventsCard'; // Commented out – not needed for now
 import VersionCard from './VersionCard';
 import ErrorsActivityCard from './ErrorsActivityCard';
+import IngestCard from './IngestCard';
 
 export default function FeedDetailView({
   account,
@@ -17,6 +18,7 @@ export default function FeedDetailView({
   channelLoading,
   onSelectChannel,
   onBack,
+  accountIngests,
 }) {
   // Merge global + channel data so all existing cards work unchanged
   const mergedData = { ...globalData, ...channelData };
@@ -64,6 +66,9 @@ export default function FeedDetailView({
         {/* Row 2: Playlist + Version */}
         <PlaylistHealthCard data={mergedData} feedCode={selectedChannel} />
         <VersionCard data={mergedData} accountChannels={account.channels} />
+
+        {/* Ingest Card (full width) */}
+        <IngestCard ingests={accountIngests} />
 
         {/* Row 3: Asset Downloads + Media Library */}
         <AssetDownloadCard data={mergedData} />

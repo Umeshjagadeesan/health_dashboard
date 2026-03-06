@@ -8,8 +8,13 @@ export default function TopBar({
   refreshInterval,
   onRefreshIntervalChange,
   prefetchStatus,
+  blipAuthStatus,
 }) {
   const isPrefetching = prefetchStatus && !prefetchStatus.complete && prefetchStatus.total > 0;
+
+  // Blip auth indicator
+  const blipOk = blipAuthStatus?.hasSession;
+  const blipMode = blipAuthStatus?.mode; // 'token' or 'session'
 
   return (
     <header className="top-bar">
@@ -46,6 +51,19 @@ export default function TopBar({
         )}
       </div>
       <div className="top-bar-right">
+        {/* Blip auth status (auto-managed, no user action needed) */}
+        <div
+          className={`blip-session-badge ${blipOk ? 'active' : 'expired'}`}
+          title={
+            blipOk
+              ? `Servo/ePub: Connected (${blipMode === 'token' ? 'API token' : 'session cookie'})`
+              : 'Servo/ePub: Connecting...'
+          }
+        >
+          <span>{blipOk ? '🔑' : '⏳'}</span>
+          <span>{blipOk ? (blipMode === 'token' ? 'API' : 'Servo') : 'Servo…'}</span>
+        </div>
+
         <div className="last-refresh">
           Last refresh: {lastRefresh ? lastRefresh.toLocaleTimeString() : '--'}
         </div>

@@ -4,6 +4,7 @@ import TopBar from './components/TopBar';
 import StatusStrip from './components/StatusStrip';
 import AccountCard from './components/AccountCard';
 import FeedDetailView from './components/FeedDetailView';
+import IngestPanel from './components/IngestPanel';
 
 export default function App() {
   const {
@@ -20,6 +21,9 @@ export default function App() {
     setRefreshInterval,
     prefetchStatus,
     isFeedCached,
+    getIngestsForAccount,
+    getAllIngests,
+    blipAuthStatus,
     refresh,
     openAccount,
     selectChannel,
@@ -38,6 +42,14 @@ export default function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [refresh]);
 
+  // Get all ingests for the floating panel
+  const allIngests = getAllIngests();
+
+  // Get account-specific ingests when viewing a detail
+  const accountIngests = selectedAccount
+    ? getIngestsForAccount(selectedAccount.name)
+    : [];
+
   return (
     <>
       <TopBar
@@ -48,6 +60,7 @@ export default function App() {
         refreshInterval={refreshInterval}
         onRefreshIntervalChange={setRefreshInterval}
         prefetchStatus={prefetchStatus}
+        blipAuthStatus={blipAuthStatus}
       />
 
       <main className="dashboard">
@@ -110,14 +123,19 @@ export default function App() {
             channelLoading={channelLoading}
             onSelectChannel={selectChannel}
             onBack={goHome}
+            accountIngests={accountIngests}
           />
         )}
       </main>
+
+      {/* ── Floating Ingest Panel (right side) ── */}
+      <IngestPanel ingests={allIngests} />
 
       <footer className="footer">
         <span>CloudPort Health Dashboard</span>
         <span>
           {accounts.length > 0 && `${accounts.length} accounts · `}
+          {allIngests.length > 0 && `${allIngests.length} ingests · `}
           Auto-refresh: {refreshInterval > 0 ? `${refreshInterval}s` : 'OFF'}
         </span>
       </footer>
