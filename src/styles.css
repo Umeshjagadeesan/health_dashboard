@@ -364,6 +364,12 @@ body {
    Now Playing Section
    ============================================ */
 
+.np-preview-wrapper {
+  margin-bottom: 12px;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
 .now-playing-content {
   display: flex;
   align-items: center;

@@ -2,6 +2,7 @@ import React from 'react';
 import { Card, CardHeader, CardBody } from './Card';
 import { Placeholder } from './DataDisplay';
 import { formatDuration, formatTime } from '../utils/helpers';
+import LivePreview, { getNowPlayingJanusUrl } from './LivePreview';
 
 export default function NowPlayingCard({ data }) {
   if (!data) return null;
@@ -43,10 +44,20 @@ export default function NowPlayingCard({ data }) {
   const badgeText = isLive ? 'LIVE' : (activeHeadend?.state === 'media' ? 'ON AIR' : 'IDLE');
   const badgeClass = isLive ? 'danger' : (activeHeadend?.state === 'media' ? 'success' : 'warning');
 
+  // Janus WebSocket URL for the active headend's live preview
+  const janusUrl = activeHeadend ? getNowPlayingJanusUrl(activeHeadend) : null;
+
   return (
     <Card id="now-playing" wide>
       <CardHeader icon="▶️" title="Now Playing" badge={badgeText} badgeClass={badgeClass} />
       <CardBody>
+        {/* ── Live preview from playout device ── */}
+        {janusUrl && (
+          <div className="np-preview-wrapper">
+            <LivePreview wsUrl={janusUrl} size="medium" />
+          </div>
+        )}
+
         <div className="now-playing-content">
           <div className="np-info">
             {currentMedia ? (
@@ -98,23 +109,32 @@ export default function NowPlayingCard({ data }) {
           </div>
         </div>
 
+        {/* ── Multiple headends with individual previews ── */}
         {headends.length > 1 && (
           <div style={{ marginTop: 16 }}>
             <div className="card-section-title">Headends</div>
             <div className="device-grid">
-              {headends.map((h) => (
-                <div key={h.id} className={`device-card ${h.state === 'media' || h.state === 'live' ? 'online' : 'offline'}`}>
-                  <div className="device-name">{h.code || `Headend ${h.id}`}</div>
-                  <div className="device-detail">
-                    State: {h.state || 'idle'} &bull; Type: {h.playout_type || '--'}
-                  </div>
-                  {h.media && (
-                    <div className="device-detail" style={{ marginTop: 2, color: 'var(--text-primary)' }}>
-                      {h.media.title}
+              {headends.map((h) => {
+                const hJanusUrl = getNowPlayingJanusUrl(h);
+                return (
+                  <div key={h.id} className={`device-card ${h.state === 'media' || h.state === 'live' ? 'online' : 'offline'}`}>
+                    <div className="device-name">{h.code || `Headend ${h.id}`}</div>
+                    <div className="device-detail">
+                      State: {h.state || 'idle'} &bull; Type: {h.playout_type || '--'}
                     </div>
-                  )}
-                </div>
-              ))}
+                    {h.media && (
+                      <div className="device-detail" style={{ marginTop: 2, color: 'var(--text-primary)' }}>
+                        {h.media.title}
+                      </div>
+                    )}
+                    {hJanusUrl && (
+                      <div style={{ marginTop: 6 }}>
+                        <LivePreview wsUrl={hJanusUrl} size="small" />
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}
