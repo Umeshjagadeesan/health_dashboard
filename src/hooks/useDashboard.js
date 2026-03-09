@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   fetchGlobalData,
   fetchFeedData,
+  fetchFeedSummary,
   fetchIngestData,
   buildFeedIdMap,
   buildAccountIngestMap,
@@ -10,7 +11,8 @@ import {
   getBlipAuthStatus,
 } from '../utils/api';
 
-const PREFETCH_CONCURRENCY = 3; // max parallel feed fetches
+const PREFETCH_CONCURRENCY = 6; // max parallel feed prefetches
+const PREFETCH_DELAY_MS = 2000; // wait before starting background prefetch
 
 export function useDashboard() {
   const [globalData, setGlobalData] = useState(null);
@@ -88,7 +90,7 @@ export function useDashboard() {
     return feedIdMapRef.current[feedCode] || null;
   }, []);
 
-  // ── Background prefetch all feeds ───────────────────────────────────
+  // ── Background prefetch all feeds (LIGHTWEIGHT summaries) ──────────
   const prefetchAllFeeds = useCallback(async (channels) => {
     if (!channels || channels.length === 0) return;
 
@@ -97,7 +99,8 @@ export function useDashboard() {
     let done = 0;
     setPrefetchStatus({ done: 0, total, complete: false });
 
-    // Work queue with concurrency limit
+    // Work queue with concurrency limit — fetch SUMMARIES (2-3 endpoints)
+    // instead of full data (11 endpoints) → 4× faster
     const queue = [...channels];
     const workers = Array(Math.min(PREFETCH_CONCURRENCY, queue.length))
       .fill(null)
@@ -106,14 +109,17 @@ export function useDashboard() {
           if (prefetchAbortRef.current) return;
           const ch = queue.shift();
           try {
+            // Skip if already have full data cached
+            if (feedCacheRef.current[ch]?.data?._meta && !feedCacheRef.current[ch].data._meta._summary) {
+              done++;
+              setPrefetchStatus((prev) => ({ ...prev, done }));
+              continue;
+            }
             const numId = feedIdMapRef.current[ch] || null;
-            const data = await fetchFeedData(ch, numId);
-            feedCacheRef.current[ch] = { data, timestamp: Date.now() };
-
-            // If user is already viewing this channel, update UI immediately
-            if (selectedChannelRef.current === ch) {
-              setChannelData(data);
-              setChannelLoading(false);
+            const data = await fetchFeedSummary(ch, numId);
+            // Only store if no full data exists yet
+            if (!feedCacheRef.current[ch] || feedCacheRef.current[ch].data?._meta?._summary) {
+              feedCacheRef.current[ch] = { data, timestamp: Date.now() };
             }
           } catch {
             // Ignore – feed just won't be cached
@@ -169,16 +175,17 @@ export function useDashboard() {
 
   // ── Fetch channel-specific data (on-demand with cache awareness) ───
   const loadChannel = useCallback(async (feedCode) => {
-    // Serve from cache immediately if available
+    // Serve from FULL cache immediately if available (not summary)
     const cached = feedCacheRef.current[feedCode];
-    if (cached) {
+    const hasFullData = cached && !cached.data?._meta?._summary;
+    if (hasFullData) {
       setChannelData(cached.data);
       setChannelLoading(false);
     } else {
       setChannelLoading(true);
     }
 
-    // Always fetch fresh data in background
+    // Always fetch FULL data for detail view
     try {
       const numId = feedIdMapRef.current[feedCode] || null;
       const data = await fetchFeedData(feedCode, numId);
@@ -188,7 +195,7 @@ export function useDashboard() {
         setChannelData(data);
       }
     } catch {
-      if (!cached && selectedChannelRef.current === feedCode) {
+      if (!hasFullData && selectedChannelRef.current === feedCode) {
         setChannelData(null);
       }
     } finally {
@@ -206,17 +213,22 @@ export function useDashboard() {
         const firstCh = account.channels[0];
         setSelectedChannel(firstCh);
 
-        // Use cached data if available for instant display
+        // Show summary data instantly while full data loads
         const cached = feedCacheRef.current[firstCh];
-        if (cached) {
+        const hasFullData = cached && !cached.data?._meta?._summary;
+        if (hasFullData) {
           setChannelData(cached.data);
           setChannelLoading(false);
+        } else if (cached) {
+          // Show summary as partial data (better than blank)
+          setChannelData(cached.data);
+          setChannelLoading(true);  // still loading full
         } else {
           setChannelData(null);
           setChannelLoading(true);
         }
 
-        // Always refresh in background
+        // Always fetch full data
         loadChannel(firstCh);
       } else {
         setSelectedChannel(null);
@@ -231,17 +243,21 @@ export function useDashboard() {
     (feedCode) => {
       setSelectedChannel(feedCode);
 
-      // Use cached data if available for instant display
+      // Show cached data instantly (full > summary > nothing)
       const cached = feedCacheRef.current[feedCode];
-      if (cached) {
+      const hasFullData = cached && !cached.data?._meta?._summary;
+      if (hasFullData) {
         setChannelData(cached.data);
         setChannelLoading(false);
+      } else if (cached) {
+        setChannelData(cached.data);
+        setChannelLoading(true);
       } else {
         setChannelData(null);
         setChannelLoading(true);
       }
 
-      // Always refresh in background
+      // Fetch full data
       loadChannel(feedCode);
     },
     [loadChannel]
@@ -335,19 +351,20 @@ export function useDashboard() {
       }));
   }, []);
 
-  // ── Manual refresh (global + ingests + re-prefetch all + active channel) ──
+  // ── Manual refresh (global + ingests + active channel + deferred prefetch) ──
   const refresh = useCallback(async () => {
     const accts = await refreshGlobal();
     // Fetch ingests in parallel
     refreshIngests();
-    // Re-prefetch all feeds in background
-    const allChannels = accts.flatMap((a) => a.channels);
-    prefetchAllFeeds(allChannels);
 
-    // Also refresh active channel immediately if one is selected
+    // Refresh active channel immediately if one is selected
     if (selectedChannelRef.current) {
       loadChannel(selectedChannelRef.current);
     }
+
+    // Re-prefetch summaries in background (deferred, non-blocking)
+    const allChannels = accts.flatMap((a) => a.channels);
+    setTimeout(() => prefetchAllFeeds(allChannels), 500);
   }, [refreshGlobal, refreshIngests, loadChannel, prefetchAllFeeds]);
 
   // ── Auto-refresh timer ──
@@ -363,22 +380,32 @@ export function useDashboard() {
     };
   }, [refresh, refreshInterval]);
 
-  // ── Initial fetch + prefetch ──
+  // ── Initial fetch ──
+  // 1) Fetch global data + ingests immediately (fast — ~6 parallel requests)
+  // 2) Delay background prefetch so the page becomes interactive first
   useEffect(() => {
     (async () => {
       const accts = await refreshGlobal();
-      // Fetch ingests in parallel
+      // Fetch ingests in parallel (separate from global, ~3 requests)
       refreshIngests();
-      // Once we know all channels, prefetch them all in background
+
+      // Delay the lightweight prefetch so the page renders first
       const allChannels = accts.flatMap((a) => a.channels);
-      prefetchAllFeeds(allChannels);
+      if (allChannels.length > 0) {
+        setTimeout(() => {
+          prefetchAllFeeds(allChannels);
+        }, PREFETCH_DELAY_MS);
+      }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ── Helper: check if a channel has cached data ──
+  // Returns: 'full' | 'summary' | false
   const isFeedCached = useCallback((feedCode) => {
-    return !!feedCacheRef.current[feedCode];
+    const cached = feedCacheRef.current[feedCode];
+    if (!cached) return false;
+    return cached.data?._meta?._summary ? 'summary' : 'full';
   }, []);
 
   // ── Blip auth status (from proxy) ──

@@ -4,6 +4,9 @@ import { parsePrometheusForFeed } from '../utils/helpers';
 export default function AccountCard({ account, globalData, isCached, onClick }) {
   const { name, channels, devices } = account;
 
+  // isCached is now: 'full' | 'summary' | false
+  const cacheLevel = isCached; // keep semantic name
+
   // ── Parse headend health summary from Prometheus metrics ──
   const metricsText =
     globalData?.metricsStatus?.ok && typeof globalData.metricsStatus.data === 'string'
@@ -25,21 +28,27 @@ export default function AccountCard({ account, globalData, isCached, onClick }) 
   const typeSet = new Set(devices.map((d) => d.Type).filter(Boolean));
   const types = Array.from(typeSet).join(', ');
 
+  // ── Status badge logic ──
+  let statusBadge;
+  if (cacheLevel === 'full') {
+    statusBadge = <span className="card-badge success" title="Full data pre-loaded">✓ Ready</span>;
+  } else if (cacheLevel === 'summary') {
+    statusBadge = <span className="card-badge info" title="Summary loaded, full data loads on click">✓ Ready</span>;
+  } else {
+    // Not yet prefetched — still show the card instantly, no spinner
+    statusBadge = (
+      <span className="card-badge" style={{ opacity: 0.5 }} title="Click to load details">
+        <span className="mini-spinner"></span> Loading
+      </span>
+    );
+  }
+
   return (
-    <div className={`account-card${isCached ? ' cached' : ''}`} onClick={onClick}>
+    <div className={`account-card${cacheLevel ? ' cached' : ''}`} onClick={onClick}>
       <div className="account-card-header">
         <div className="account-name">{name}</div>
         <div className="account-badges">
-          {isCached && (
-            <span className="card-badge success" title="Data pre-loaded, click for instant view">
-              ✓ Ready
-            </span>
-          )}
-          {!isCached && (
-            <span className="card-badge info" title="Data loading in background…">
-              <span className="mini-spinner"></span> Loading
-            </span>
-          )}
+          {statusBadge}
           {totalCount > 0 && (
             <span
               className={`card-badge ${

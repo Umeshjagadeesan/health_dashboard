@@ -197,6 +197,40 @@ export function buildEpubIngestMap(epubResult) {
 }
 
 // ── Fetch feed-specific data for a single channel ────────────────────
+
+/**
+ * Lightweight summary — only 2-3 fast endpoints needed for the home-page
+ * account cards (playlist health + now_playing).
+ * ~3 requests instead of ~11, so background prefetch is 4× faster.
+ */
+export async function fetchFeedSummary(feedCode, numericId = null) {
+  const f = (path) => apiFetch(path);
+  const p = {};
+
+  // v2: playlist health (fast)
+  p.playlistStatus = f(`/api/v2/feeds/${feedCode}/playlist/status`);
+  p.currentShow    = f(`/api/v2/feeds/${feedCode}/current_running_show`);
+
+  if (numericId) {
+    p.nowPlaying = f(`/v1/api/feeds/${numericId}/now_playing`);
+  }
+
+  const keys = Object.keys(p);
+  const results = await Promise.allSettled(Object.values(p));
+  const data = {};
+  keys.forEach((key, i) => {
+    data[key] = results[i].status === 'fulfilled'
+      ? results[i].value
+      : { ok: false, error: 'Promise rejected' };
+  });
+  data._meta = { feedCode, numericId, _summary: true };
+  return data;
+}
+
+/**
+ * Full feed data — everything needed for the detail view.
+ * Called on-demand when user clicks into an account/channel.
+ */
 export async function fetchFeedData(feedCode, numericId = null) {
   const f = (path) => apiFetch(path);
 

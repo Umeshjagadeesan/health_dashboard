@@ -370,6 +370,7 @@ body {
   overflow: hidden;
 }
 
+
 .now-playing-content {
   display: flex;
   align-items: center;
@@ -964,7 +965,9 @@ body {
 }
 
 .device-card.online::before { background: var(--success); }
+.device-card.online.rescue::before { background: var(--warning); }
 .device-card.offline::before { background: var(--danger); }
+.device-card.selected { border-color: var(--accent-primary); box-shadow: 0 0 0 1px var(--accent-primary); }
 
 .device-name {
   font-size: 13px;

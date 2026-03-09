@@ -106,7 +106,12 @@ export default function App() {
                     key={acct.name}
                     account={acct}
                     globalData={globalData}
-                    isCached={acct.channels.every((ch) => isFeedCached(ch))}
+                    isCached={acct.channels.reduce((best, ch) => {
+                      const level = isFeedCached(ch);
+                      if (!level) return best;                       // no cache
+                      if (best === 'full') return 'full';            // keep best
+                      return level;                                  // 'summary' or 'full'
+                    }, false)}
                     onClick={() => openAccount(acct)}
                   />
                 ))}
