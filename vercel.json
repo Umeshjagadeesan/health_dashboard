@@ -22,6 +22,10 @@
     {
       "source": "/janusproxy/:path*",
       "destination": "https://pocs-trex.demo.amagi.tv/:path*"
+    },
+    {
+      "source": "/orcproxy/:path*",
+      "destination": "https://aws-use1-psync-cp-orchestrator.demo.amagi.tv/:path*"
     }
   ]
 }

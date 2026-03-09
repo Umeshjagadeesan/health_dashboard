@@ -129,6 +129,7 @@ export default function App() {
             onSelectChannel={selectChannel}
             onBack={goHome}
             accountIngests={accountIngests}
+            onRefreshChannel={() => selectedChannel && selectChannel(selectedChannel)}
           />
         )}
       </main>

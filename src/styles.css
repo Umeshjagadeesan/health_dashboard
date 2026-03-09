@@ -1333,6 +1333,109 @@ body {
   color: var(--text-primary);
 }
 
+/* ── Player Controls (in detail header) ───────────────────────── */
+.player-controls {
+  display: flex;
+  gap: 12px;
+  margin-left: auto;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.headend-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px;
+  border-radius: var(--radius-md);
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  font-size: 12px;
+}
+
+.hc-name {
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+
+.hc-status {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.hc-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  flex-shrink: 0;
+}
+.hc-dot.on {
+  background: var(--success);
+  box-shadow: 0 0 6px rgba(34, 197, 94, 0.5);
+}
+
+.hc-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.hc-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 600;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.hc-btn:hover:not(:disabled) {
+  border-color: var(--border-light);
+}
+
+.hc-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.hc-btn.hc-start:hover:not(:disabled) {
+  background: rgba(34, 197, 94, 0.1);
+  border-color: var(--success);
+  color: var(--success);
+}
+
+.hc-btn.hc-stop:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.1);
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.hc-btn .mini-spinner {
+  width: 10px;
+  height: 10px;
+  border-width: 2px;
+}
+
+.hc-error {
+  color: var(--danger);
+  font-size: 11px;
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .channel-tabs {
   display: flex;
   gap: 8px;

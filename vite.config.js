@@ -437,6 +437,13 @@ export default defineConfig({
         secure: false,
         rewrite: (path) => path.replace(/^\/janusproxy/, ''),
       },
+      // Orchestrator proxy for player start/stop/status
+      '/orcproxy': {
+        target: 'https://aws-use1-psync-cp-orchestrator.demo.amagi.tv',
+        changeOrigin: true,
+        secure: false,
+        rewrite: (path) => path.replace(/^\/orcproxy/, ''),
+      },
     },
   },
 });

@@ -1,0 +1,170 @@
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { getPlayerStatus, startPlayer, stopPlayer } from '../utils/api';
+
+/**
+ * PlayerControls – Start/Stop buttons with live status for each headend.
+ *
+ * Props:
+ *   feedCode   – e.g. "amghls"
+ *   headends   – array of headend objects from now_playing API [{ id, code, state, ... }]
+ *   onStatusChange – optional callback after a start/stop action completes
+ */
+export default function PlayerControls({ feedCode, headends, onStatusChange }) {
+  if (!feedCode || !headends || headends.length === 0) return null;
+
+  return (
+    <div className="player-controls">
+      {headends.map((h) => (
+        <HeadendControl
+          key={h.id || h.code}
+          feedCode={feedCode}
+          headend={h}
+          onStatusChange={onStatusChange}
+        />
+      ))}
+    </div>
+  );
+}
+
+function HeadendControl({ feedCode, headend, onStatusChange }) {
+  const hCode = headend.code || `headend_${headend.id}`;
+  const [status, setStatus] = useState(headend.state || null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+  const pollRef = useRef(null);
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
+
+  // Fetch fresh status from orchestrator
+  const refreshStatus = useCallback(async () => {
+    const res = await getPlayerStatus(feedCode, hCode);
+    if (!mountedRef.current) return;
+    if (res.ok && res.data) {
+      const newState = res.data.state || res.data.status || null;
+      if (newState) setStatus(newState);
+    }
+  }, [feedCode, hCode]);
+
+  // Fetch initial status on mount
+  useEffect(() => {
+    refreshStatus();
+  }, [refreshStatus]);
+
+  // Poll status while busy (action in progress)
+  useEffect(() => {
+    if (busy) {
+      pollRef.current = setInterval(() => {
+        refreshStatus().then(() => {
+          if (!mountedRef.current) return;
+          // Stop polling once status settles
+          setBusy((prev) => {
+            // Keep busy until the state actually changes from the transitional state
+            return prev;
+          });
+        });
+      }, 5000);
+    } else {
+      if (pollRef.current) clearInterval(pollRef.current);
+    }
+    return () => { if (pollRef.current) clearInterval(pollRef.current); };
+  }, [busy, refreshStatus]);
+
+  const handleStart = async () => {
+    setBusy(true);
+    setError(null);
+    const res = await startPlayer(feedCode, hCode);
+    if (!mountedRef.current) return;
+    if (!res.ok) {
+      setError(res.error);
+      setBusy(false);
+      return;
+    }
+    // Poll for status update — give the player time to boot
+    setTimeout(async () => {
+      await refreshStatus();
+      if (mountedRef.current) {
+        setBusy(false);
+        onStatusChange?.();
+      }
+    }, 8000);
+  };
+
+  const handleStop = async () => {
+    setBusy(true);
+    setError(null);
+    const res = await stopPlayer(feedCode, hCode);
+    if (!mountedRef.current) return;
+    if (!res.ok) {
+      setError(res.error);
+      setBusy(false);
+      return;
+    }
+    // Poll for status update
+    setTimeout(async () => {
+      await refreshStatus();
+      if (mountedRef.current) {
+        setBusy(false);
+        onStatusChange?.();
+      }
+    }, 8000);
+  };
+
+  // Derive display info
+  const isPlaying = status === 'media' || status === 'live' || status === 'rescue' || status === 'slate';
+  const isIdle = status === 'idle' || status === 'off' || status === 'stopped' || status === null;
+  const statusLabel = status
+    ? status.charAt(0).toUpperCase() + status.slice(1)
+    : 'Unknown';
+  const statusColor = isPlaying
+    ? 'var(--success)'
+    : isIdle
+      ? 'var(--text-muted)'
+      : 'var(--warning)';
+
+  return (
+    <div className="headend-control">
+      <span className="hc-name">{hCode}</span>
+      <span className="hc-status" style={{ color: statusColor }}>
+        <span className={`hc-dot${isPlaying ? ' on' : ''}`} />
+        {statusLabel}
+      </span>
+      <div className="hc-actions">
+        <button
+          className="hc-btn hc-start"
+          onClick={handleStart}
+          disabled={busy || isPlaying}
+          title={isPlaying ? 'Player is already running' : 'Start player'}
+        >
+          {busy && !isPlaying ? (
+            <span className="mini-spinner" />
+          ) : (
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+              <polygon points="5,3 19,12 5,21" />
+            </svg>
+          )}
+          <span>Start</span>
+        </button>
+        <button
+          className="hc-btn hc-stop"
+          onClick={handleStop}
+          disabled={busy || isIdle}
+          title={isIdle ? 'Player is already stopped' : 'Stop player'}
+        >
+          {busy && isPlaying ? (
+            <span className="mini-spinner" />
+          ) : (
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+              <rect x="4" y="4" width="16" height="16" rx="2" />
+            </svg>
+          )}
+          <span>Stop</span>
+        </button>
+      </div>
+      {error && <span className="hc-error" title={error}>⚠ {error}</span>}
+    </div>
+  );
+}

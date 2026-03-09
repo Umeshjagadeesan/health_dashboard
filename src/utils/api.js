@@ -90,6 +90,61 @@ export async function getBlipAuthStatus() {
   return { hasSession: false, sessionAge: null, jwtExpiry: null, mode: null };
 }
 
+// ── Orchestration API (player start / stop / status) ────────────────
+const ORC_BASE = '/orcproxy/pocs/api/v1/feeds';
+
+/**
+ * Get player status for a specific headend.
+ * GET /pocs/api/v1/feeds/{feedCode}/players/{headendCode}
+ */
+export async function getPlayerStatus(feedCode, headendCode) {
+  try {
+    const res = await fetch(`${ORC_BASE}/${feedCode}/players/${headendCode}`, {
+      headers: { 'Accept': 'application/json' },
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return { ok: true, data: await res.json() };
+  } catch (err) {
+    return { ok: false, error: err.message, data: null };
+  }
+}
+
+/**
+ * Start a player.
+ * POST /pocs/api/v1/feeds/{feedCode}/players/{headendCode}/action { command: "start" }
+ */
+export async function startPlayer(feedCode, headendCode) {
+  try {
+    const res = await fetch(`${ORC_BASE}/${feedCode}/players/${headendCode}/action`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+      body: JSON.stringify({ command: 'start' }),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return { ok: true, data: await res.json() };
+  } catch (err) {
+    return { ok: false, error: err.message, data: null };
+  }
+}
+
+/**
+ * Stop a player.
+ * POST /pocs/api/v1/feeds/{feedCode}/players/{headendCode}/action { command: "stop" }
+ */
+export async function stopPlayer(feedCode, headendCode) {
+  try {
+    const res = await fetch(`${ORC_BASE}/${feedCode}/players/${headendCode}/action`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+      body: JSON.stringify({ command: 'stop' }),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return { ok: true, data: await res.json() };
+  } catch (err) {
+    return { ok: false, error: err.message, data: null };
+  }
+}
+
 // ── Fetch global data (no feed needed) ───────────────────────────────
 export async function fetchGlobalData() {
   const f = (path) => apiFetch(path);

@@ -9,6 +9,7 @@ import StorageCard from './StorageCard';
 import VersionCard from './VersionCard';
 import ErrorsActivityCard from './ErrorsActivityCard';
 import IngestCard from './IngestCard';
+import PlayerControls from './PlayerControls';
 
 export default function FeedDetailView({
   account,
@@ -19,9 +20,14 @@ export default function FeedDetailView({
   onSelectChannel,
   onBack,
   accountIngests,
+  onRefreshChannel,
 }) {
   // Merge global + channel data so all existing cards work unchanged
   const mergedData = { ...globalData, ...channelData };
+
+  // Extract headends from now_playing for PlayerControls
+  const np = channelData?.nowPlaying;
+  const headends = np?.ok && Array.isArray(np.data) ? np.data : [];
 
   return (
     <div className="feed-detail">
@@ -32,6 +38,14 @@ export default function FeedDetailView({
         </button>
         <div className="detail-title">{account.name}</div>
         {channelLoading && <span className="loading-spinner"></span>}
+        {/* ── Player Start/Stop controls (same line as account name) ── */}
+        {selectedChannel && headends.length > 0 && (
+          <PlayerControls
+            feedCode={selectedChannel}
+            headends={headends}
+            onStatusChange={onRefreshChannel}
+          />
+        )}
       </div>
 
       {/* ── Channel Tabs (only if more than 1 channel) ── */}
