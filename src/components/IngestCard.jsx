@@ -121,7 +121,7 @@ function getStatusLabel(ingest) {
   const rs = getRelayStatus(ingest);
   const br = getInputBitrate(ingest);
   if (rs === 'RUNNING' && br > 0) return '● LIVE';
-  if (rs === 'RUNNING') return '◉ Running';
+  if (rs === 'RUNNING') return '⚠ Bitrate Zero';
   if (rs === 'PENDING_CONFIGURATION') return '◌ Pending';
   if (rs === 'STOPPED') return '○ Stopped';
   return '? N/A';

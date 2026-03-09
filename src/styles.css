@@ -29,6 +29,9 @@
   --info: #3b82f6;
   --info-bg: rgba(59, 130, 246, 0.1);
 
+  --purple: #a78bfa;
+  --purple-bg: rgba(167, 139, 250, 0.1);
+
   /* Spacing */
   --radius: 12px;
   --radius-sm: 8px;
@@ -1562,11 +1565,11 @@ body {
 }
 
 .ingest-item.running {
-  border-left: 3px solid var(--info);
+  border-left: 3px solid var(--warning);
 }
 
 .ingest-item.pending {
-  border-left: 3px solid var(--warning);
+  border-left: 3px solid var(--purple);
 }
 
 .ingest-item.idle {
@@ -1591,12 +1594,12 @@ body {
 }
 
 .ingest-status-dot.running {
-  background: var(--info);
-  box-shadow: 0 0 6px rgba(59, 130, 246, 0.3);
+  background: var(--warning);
+  box-shadow: 0 0 6px rgba(245, 158, 11, 0.3);
 }
 
 .ingest-status-dot.pending {
-  background: var(--warning);
+  background: var(--purple);
   animation: pulse-dot 3s infinite;
 }
 
@@ -1646,13 +1649,13 @@ body {
 }
 
 .ingest-status-badge.running {
-  background: var(--info-bg);
-  color: var(--info);
+  background: var(--warning-bg);
+  color: var(--warning);
 }
 
 .ingest-status-badge.pending {
-  background: var(--warning-bg);
-  color: var(--warning);
+  background: var(--purple-bg);
+  color: var(--purple);
 }
 
 .ingest-status-badge.idle {
@@ -1826,11 +1829,11 @@ body {
 }
 
 .ingest-card-item.running::before {
-  background: var(--info);
+  background: var(--warning);
 }
 
 .ingest-card-item.pending::before {
-  background: var(--warning);
+  background: var(--purple);
 }
 
 .ingest-card-item.idle::before {
