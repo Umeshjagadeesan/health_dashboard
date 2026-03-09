@@ -1,56 +1,37 @@
 /**
- * API utility – routes through Vite's /cpproxy and /blipproxy middleware.
+ * API utility – ALL API calls route through Vite's /blipproxy middleware.
  * Config is hardcoded so the user never needs to enter settings.
  *
  * Authentication:
- *   - CloudPort APIs (/cpproxy): uses x-user-token header
- *   - Servo/ePub APIs (/blipproxy): session managed automatically by the proxy
- *     (Auth0 JWT refresh → _blip_session acquisition, all server-side)
+ *   ALL requests (CloudPort v1/v2, Servo, ePub) use _blip_session cookie,
+ *   managed automatically by the proxy (Devise form login, server-side).
+ *
+ *   The old x-user-token approach was limited to 18/42 feeds (403 errors
+ *   for any feed the token didn't have access to). The session cookie
+ *   has full user-level access to ALL 42 feeds.
  */
 
 // ── Hardcoded configuration ──────────────────────────────────────────
 export const CONFIG = {
   baseUrl: 'https://pocs.demo.amagi.tv',
-  token: '4ppioic-yycR64SGC-z1',
 };
 
-// ── Core fetch helpers ────────────────────────────────────────────────
-
-/** Fetch from CloudPort API (uses x-user-token) */
-export async function apiFetch(path) {
-  const url = `/cpproxy${path}`;
-  const headers = {
-    'x-user-token': CONFIG.token,
-    'Content-Type': 'application/json',
-    'x-target-base': CONFIG.baseUrl,
-  };
-  try {
-    const res = await fetch(url, { headers });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const contentType = res.headers.get('content-type') || '';
-    if (contentType.includes('application/json')) {
-      return { ok: true, data: await res.json(), status: res.status };
-    }
-    return { ok: true, data: await res.text(), status: res.status };
-  } catch (err) {
-    return { ok: false, error: err.message, data: null };
-  }
-}
+// ── Core fetch helper (single, unified) ──────────────────────────────
 
 /**
- * Fetch from Servo/ePub API (session managed automatically).
+ * Fetch any API path through the session-authenticated proxy.
  *
  * - LOCAL (Vite dev server): the /blipproxy middleware in vite.config.js
  *   performs Devise login and attaches _blip_session cookie server-side.
  *   It needs x-target-base to know where to forward.
  *
  * - VERCEL: the /blipproxy route hits a serverless function
- *   (api/blipproxy/[...path].js) which also handles login + session.
+ *   (api/blipproxy.js) which also handles login + session.
  *   It does NOT need x-target-base (hardcoded in the function).
  *
  * Both environments handle auth failures + retries transparently.
  */
-export async function blipFetch(path) {
+async function sessionFetch(path) {
   const url = `/blipproxy${path}`;
   const headers = {
     'x-target-base': CONFIG.baseUrl,   // Used by Vite proxy (ignored on Vercel)
@@ -63,7 +44,7 @@ export async function blipFetch(path) {
       // 503 = proxy couldn't authenticate at all
       if (res.status === 503) {
         const err = await res.json().catch(() => ({}));
-        return { ok: false, error: err.detail || 'Blip session unavailable', data: null };
+        return { ok: false, error: err.detail || 'Session unavailable', data: null };
       }
       throw new Error(`HTTP ${res.status}`);
     }
@@ -90,6 +71,12 @@ export async function blipFetch(path) {
     return { ok: false, error: err.message, data: null };
   }
 }
+
+/** Fetch from CloudPort API (session-authenticated — full access to ALL feeds) */
+export const apiFetch = sessionFetch;
+
+/** Fetch from Servo/ePub API (session-authenticated) */
+export const blipFetch = sessionFetch;
 
 /**
  * Check blip auth status from the proxy.

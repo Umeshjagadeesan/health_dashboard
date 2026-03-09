@@ -317,51 +317,7 @@ function proxyMiddleware() {
     name: 'cors-proxy',
     configureServer(server) {
 
-      // ── /cpproxy: CloudPort APIs (x-user-token, streaming) ──────────
-      server.middlewares.use('/cpproxy', (req, res) => {
-        const targetBase = req.headers['x-target-base'];
-        if (!targetBase) {
-          res.writeHead(400, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: 'Missing x-target-base header' }));
-          return;
-        }
-
-        const targetUrl = new URL(req.url, targetBase);
-        const isHttps = targetUrl.protocol === 'https:';
-        const doRequest = isHttps ? httpsRequest : httpRequest;
-
-        const fwdHeaders = {};
-        for (const [key, val] of Object.entries(req.headers)) {
-          if (!['host', 'origin', 'referer', 'x-target-base', 'connection'].includes(key)) {
-            fwdHeaders[key] = val;
-          }
-        }
-        fwdHeaders['host'] = targetUrl.host;
-
-        const options = {
-          hostname: targetUrl.hostname,
-          port: targetUrl.port || (isHttps ? 443 : 80),
-          path: targetUrl.pathname + targetUrl.search,
-          method: req.method || 'GET',
-          headers: fwdHeaders,
-          rejectUnauthorized: false,
-        };
-
-        const proxyReq = doRequest(options, (proxyRes) => {
-          const headers = { ...proxyRes.headers };
-          headers['access-control-allow-origin'] = '*';
-          delete headers['transfer-encoding'];
-          res.writeHead(proxyRes.statusCode, headers);
-          proxyRes.pipe(res);
-        });
-        proxyReq.on('error', (err) => {
-          res.writeHead(502, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: err.message }));
-        });
-        req.pipe(proxyReq);
-      });
-
-      // ── /blipproxy: Servo/ePub APIs (auto-managed session) ──────────
+      // ── /blipproxy: ALL APIs (auto-managed session) ─────────────────
       //    Buffers upstream response to detect auth failures.
       //    On failure: re-logs in and retries once. Client never sees 302s.
       server.middlewares.use('/blipproxy', async (req, res) => {

@@ -12,10 +12,6 @@
   },
   "rewrites": [
     {
-      "source": "/cpproxy/:path*",
-      "destination": "https://pocs.demo.amagi.tv/:path*"
-    },
-    {
       "source": "/blipproxy/:path*",
       "destination": "/api/blipproxy?p=/:path*"
     },
