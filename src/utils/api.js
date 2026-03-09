@@ -110,15 +110,15 @@ export async function getPlayerStatus(feedCode, headendCode) {
 }
 
 /**
- * Start a player.
- * POST /pocs/api/v1/feeds/{feedCode}/players/{headendCode}/action { command: "start" }
+ * Start a player (sends email notification via server).
+ * POST /orcaction  { action: "start", feedCode, playerId }
  */
 export async function startPlayer(feedCode, headendCode) {
   try {
-    const res = await fetch(`${ORC_BASE}/${feedCode}/players/${headendCode}/action`, {
+    const res = await fetch('/orcaction', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-      body: JSON.stringify({ command: 'start' }),
+      body: JSON.stringify({ action: 'start', feedCode, playerId: headendCode }),
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return { ok: true, data: await res.json() };
@@ -128,15 +128,15 @@ export async function startPlayer(feedCode, headendCode) {
 }
 
 /**
- * Stop a player.
- * POST /pocs/api/v1/feeds/{feedCode}/players/{headendCode}/action { command: "stop" }
+ * Stop a player (sends email notification via server).
+ * POST /orcaction  { action: "stop", feedCode, playerId }
  */
 export async function stopPlayer(feedCode, headendCode) {
   try {
-    const res = await fetch(`${ORC_BASE}/${feedCode}/players/${headendCode}/action`, {
+    const res = await fetch('/orcaction', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-      body: JSON.stringify({ command: 'stop' }),
+      body: JSON.stringify({ action: 'stop', feedCode, playerId: headendCode }),
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return { ok: true, data: await res.json() };

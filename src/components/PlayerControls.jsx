@@ -52,7 +52,8 @@ function getOrcPlayerId(headendCode, feedCode) {
 function HeadendControl({ feedCode, headend, onStatusChange }) {
   const hCode = headend.code || `headend_${headend.id}`;
   const orcPlayerId = getOrcPlayerId(hCode, feedCode);
-  const [status, setStatus] = useState(headend.state || null);
+  // now_playing often returns state: null, so default to 'loading'
+  const [status, setStatus] = useState(headend.state || 'loading');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const pollRef = useRef(null);
@@ -65,16 +66,29 @@ function HeadendControl({ feedCode, headend, onStatusChange }) {
 
   // Fetch fresh status from orchestrator
   const refreshStatus = useCallback(async () => {
-    if (!orcPlayerId) return;
-    const res = await getPlayerStatus(feedCode, orcPlayerId);
-    if (!mountedRef.current) return;
-    if (res.ok && res.data) {
-      const newState = res.data.state || res.data.status || null;
-      if (newState) setStatus(newState);
+    if (!orcPlayerId) {
+      setStatus('unknown');
+      return;
+    }
+    try {
+      const res = await getPlayerStatus(feedCode, orcPlayerId);
+      if (!mountedRef.current) return;
+      if (res.ok && res.data) {
+        // Orchestrator returns { status: "running" | "stopped" | "starting" | "stopping" }
+        const newState = res.data.status || res.data.state || null;
+        setStatus(newState || 'unknown');
+      } else {
+        // API call failed — show the error but keep current status
+        console.warn(`[PlayerControls] Status fetch failed for ${feedCode}/${orcPlayerId}:`, res.error);
+        if (status === 'loading') setStatus('unknown');
+      }
+    } catch (err) {
+      console.warn(`[PlayerControls] Status fetch error:`, err);
+      if (status === 'loading') setStatus('unknown');
     }
   }, [feedCode, orcPlayerId]);
 
-  // Fetch initial status on mount
+  // Fetch initial status on mount — orchestrator is the source of truth
   useEffect(() => {
     refreshStatus();
   }, [refreshStatus]);
@@ -139,18 +153,23 @@ function HeadendControl({ feedCode, headend, onStatusChange }) {
   };
 
   // Derive display info
-  // now_playing states: media, live, rescue, slate, idle
   // orchestrator states: running, stopped, starting, stopping
+  // now_playing states:  media, live, rescue, slate, idle
   const isPlaying = ['media', 'live', 'rescue', 'slate', 'running'].includes(status);
-  const isIdle = ['idle', 'off', 'stopped'].includes(status) || status === null;
-  const statusLabel = status
-    ? status.charAt(0).toUpperCase() + status.slice(1)
-    : 'Unknown';
+  const isIdle = ['idle', 'off', 'stopped'].includes(status);
+  const isTransitioning = ['starting', 'stopping', 'loading'].includes(status);
+  const statusLabel = (() => {
+    if (status === 'loading') return 'Fetching…';
+    if (!status || status === 'unknown') return 'N/A';
+    return status.charAt(0).toUpperCase() + status.slice(1);
+  })();
   const statusColor = isPlaying
     ? 'var(--success)'
     : isIdle
       ? 'var(--text-muted)'
-      : 'var(--warning)';
+      : isTransitioning
+        ? 'var(--warning)'
+        : 'var(--text-secondary)';
 
   return (
     <div className="headend-control">
@@ -163,10 +182,10 @@ function HeadendControl({ feedCode, headend, onStatusChange }) {
         <button
           className="hc-btn hc-start"
           onClick={handleStart}
-          disabled={busy || isPlaying}
-          title={isPlaying ? 'Player is already running' : 'Start player'}
+          disabled={busy || isPlaying || isTransitioning}
+          title={isPlaying ? 'Player is already running' : isTransitioning ? 'Player is transitioning…' : 'Start player'}
         >
-          {busy && !isPlaying ? (
+          {(busy || status === 'starting') ? (
             <span className="mini-spinner" />
           ) : (
             <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
@@ -178,10 +197,10 @@ function HeadendControl({ feedCode, headend, onStatusChange }) {
         <button
           className="hc-btn hc-stop"
           onClick={handleStop}
-          disabled={busy || isIdle}
-          title={isIdle ? 'Player is already stopped' : 'Stop player'}
+          disabled={busy || isIdle || isTransitioning}
+          title={isIdle ? 'Player is already stopped' : isTransitioning ? 'Player is transitioning…' : 'Stop player'}
         >
-          {busy && isPlaying ? (
+          {(busy || status === 'stopping') ? (
             <span className="mini-spinner" />
           ) : (
             <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">

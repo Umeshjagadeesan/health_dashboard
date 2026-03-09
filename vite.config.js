@@ -2,6 +2,7 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { request as httpsRequest } from 'https';
 import { request as httpRequest } from 'http';
+import { createTransport } from 'nodemailer';
 
 /* ═══════════════════════════════════════════════════════════════════════
    Blip Session Manager
@@ -310,6 +311,42 @@ function isBlipAuthFailure(result) {
 
 
 /* ═══════════════════════════════════════════════════════════════════════
+   Email Notification (Gmail SMTP via nodemailer)
+   ═══════════════════════════════════════════════════════════════════════ */
+const mailTransporter = createTransport({
+  host: 'smtp.gmail.com',
+  port: 587,
+  secure: false,
+  auth: {
+    user: 'india_se@amagi.com',
+    pass: 'xzxz ppoq vjhd cahn',
+  },
+});
+
+async function sendOrcEmail(action, feedCode, playerId, httpStatus) {
+  const verb = action === 'start' ? 'Started' : 'Stopped';
+  const subject = `Player ${verb} in pocs.demo.amagi.tv`;
+  const body = [
+    `Player action: ${action.toUpperCase()}`,
+    `Feed code:     ${feedCode}`,
+    `Player ID:     ${playerId}`,
+    `HTTP status:   ${httpStatus}`,
+    `Triggered by:  ${blipAuth.email}`,
+    `Time:          ${new Date().toISOString()}`,
+    '',
+    `Orchestrator URL: https://aws-use1-psync-cp-orchestrator.demo.amagi.tv/pocs/api/v1/feeds/${feedCode}/players/${playerId}`,
+  ].join('\n');
+
+  await mailTransporter.sendMail({
+    from: '"Health Dashboard" <india_se@amagi.com>',
+    to: 'se.india@amagi.com',
+    subject,
+    text: body,
+  });
+  console.log(`[OrcAction] ✉ Email sent: ${subject}`);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
    Vite Proxy Middleware
    ═══════════════════════════════════════════════════════════════════════ */
 function proxyMiddleware() {
@@ -399,6 +436,87 @@ function proxyMiddleware() {
             'Content-Type': 'application/json',
             'access-control-allow-origin': '*',
           });
+          res.end(JSON.stringify({ error: err.message }));
+        }
+      });
+
+      // ── /orcaction: Orchestrator start/stop + email notification ─────
+      server.middlewares.use('/orcaction', async (req, res) => {
+        if (req.method === 'OPTIONS') {
+          res.writeHead(204, {
+            'access-control-allow-origin': '*',
+            'access-control-allow-methods': 'POST, OPTIONS',
+            'access-control-allow-headers': 'Content-Type',
+          });
+          res.end();
+          return;
+        }
+        if (req.method !== 'POST') {
+          res.writeHead(405, { 'Content-Type': 'application/json', 'access-control-allow-origin': '*' });
+          res.end(JSON.stringify({ error: 'Method not allowed' }));
+          return;
+        }
+        try {
+          // Read POST body
+          const body = await new Promise((resolve, reject) => {
+            let data = '';
+            req.on('data', c => data += c);
+            req.on('end', () => { try { resolve(JSON.parse(data)); } catch { reject(new Error('Invalid JSON')); } });
+            req.on('error', reject);
+          });
+
+          const { action, feedCode, playerId } = body;
+          if (!action || !feedCode || !playerId) {
+            res.writeHead(400, { 'Content-Type': 'application/json', 'access-control-allow-origin': '*' });
+            res.end(JSON.stringify({ error: 'Missing action, feedCode, or playerId' }));
+            return;
+          }
+          if (!['start', 'stop'].includes(action)) {
+            res.writeHead(400, { 'Content-Type': 'application/json', 'access-control-allow-origin': '*' });
+            res.end(JSON.stringify({ error: 'action must be "start" or "stop"' }));
+            return;
+          }
+
+          // Forward to orchestrator
+          const orcBase = 'https://aws-use1-psync-cp-orchestrator.demo.amagi.tv';
+          const orcUrl = `${orcBase}/pocs/api/v1/feeds/${feedCode}/players/${playerId}/action`;
+          console.log(`[OrcAction] ${action.toUpperCase()} ${orcUrl}`);
+
+          const orcResult = await new Promise((resolve, reject) => {
+            const orcReq = httpsRequest(orcUrl, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+            }, (orcRes) => {
+              let data = '';
+              orcRes.on('data', c => data += c);
+              orcRes.on('end', () => resolve({ statusCode: orcRes.statusCode, body: data }));
+            });
+            orcReq.on('error', reject);
+            orcReq.write(JSON.stringify({ command: action }));
+            orcReq.end();
+          });
+
+          console.log(`[OrcAction] Response ${orcResult.statusCode}: ${orcResult.body}`);
+
+          // Parse orchestrator response
+          let orcData;
+          try { orcData = JSON.parse(orcResult.body); } catch { orcData = { raw: orcResult.body }; }
+
+          // Send email notification (fire-and-forget, don't block the response)
+          sendOrcEmail(action, feedCode, playerId, orcResult.statusCode).catch(err => {
+            console.error('[OrcAction] Email send failed:', err.message);
+          });
+
+          // Return orchestrator response to the client
+          res.writeHead(orcResult.statusCode, {
+            'Content-Type': 'application/json',
+            'access-control-allow-origin': '*',
+          });
+          res.end(JSON.stringify(orcData));
+
+        } catch (err) {
+          console.error('[OrcAction] Error:', err);
+          res.writeHead(502, { 'Content-Type': 'application/json', 'access-control-allow-origin': '*' });
           res.end(JSON.stringify({ error: err.message }));
         }
       });

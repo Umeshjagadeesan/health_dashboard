@@ -8,6 +8,9 @@
     },
     "api/blipauth/status.js": {
       "maxDuration": 15
+    },
+    "api/orcaction.js": {
+      "maxDuration": 15
     }
   },
   "rewrites": [
@@ -26,6 +29,10 @@
     {
       "source": "/orcproxy/:path*",
       "destination": "https://aws-use1-psync-cp-orchestrator.demo.amagi.tv/:path*"
+    },
+    {
+      "source": "/orcaction",
+      "destination": "/api/orcaction"
     }
   ]
 }
