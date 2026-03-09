@@ -26,8 +26,32 @@ export default function PlayerControls({ feedCode, headends, onStatusChange }) {
   );
 }
 
+/**
+ * Extract the orchestrator player ID from a headend code.
+ * CloudPort now_playing returns codes like "amghls_001", "timeint_001"
+ * but the orchestrator expects just the suffix: "001", "002".
+ *
+ * Pattern: {feedCode}_{playerId}  →  playerId
+ * Fallback: use the full code if no underscore prefix matches.
+ */
+function getOrcPlayerId(headendCode, feedCode) {
+  if (!headendCode) return null;
+  // Try stripping the feed code prefix: "amghls_001" → "001"
+  const prefix = feedCode + '_';
+  if (headendCode.startsWith(prefix)) {
+    return headendCode.substring(prefix.length);
+  }
+  // Try extracting the last segment after underscore: "foo_bar_001" → "001"
+  const lastUnderscore = headendCode.lastIndexOf('_');
+  if (lastUnderscore >= 0) {
+    return headendCode.substring(lastUnderscore + 1);
+  }
+  return headendCode;
+}
+
 function HeadendControl({ feedCode, headend, onStatusChange }) {
   const hCode = headend.code || `headend_${headend.id}`;
+  const orcPlayerId = getOrcPlayerId(hCode, feedCode);
   const [status, setStatus] = useState(headend.state || null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
@@ -41,13 +65,14 @@ function HeadendControl({ feedCode, headend, onStatusChange }) {
 
   // Fetch fresh status from orchestrator
   const refreshStatus = useCallback(async () => {
-    const res = await getPlayerStatus(feedCode, hCode);
+    if (!orcPlayerId) return;
+    const res = await getPlayerStatus(feedCode, orcPlayerId);
     if (!mountedRef.current) return;
     if (res.ok && res.data) {
       const newState = res.data.state || res.data.status || null;
       if (newState) setStatus(newState);
     }
-  }, [feedCode, hCode]);
+  }, [feedCode, orcPlayerId]);
 
   // Fetch initial status on mount
   useEffect(() => {
@@ -76,7 +101,7 @@ function HeadendControl({ feedCode, headend, onStatusChange }) {
   const handleStart = async () => {
     setBusy(true);
     setError(null);
-    const res = await startPlayer(feedCode, hCode);
+    const res = await startPlayer(feedCode, orcPlayerId);
     if (!mountedRef.current) return;
     if (!res.ok) {
       setError(res.error);
@@ -96,7 +121,7 @@ function HeadendControl({ feedCode, headend, onStatusChange }) {
   const handleStop = async () => {
     setBusy(true);
     setError(null);
-    const res = await stopPlayer(feedCode, hCode);
+    const res = await stopPlayer(feedCode, orcPlayerId);
     if (!mountedRef.current) return;
     if (!res.ok) {
       setError(res.error);
@@ -114,8 +139,10 @@ function HeadendControl({ feedCode, headend, onStatusChange }) {
   };
 
   // Derive display info
-  const isPlaying = status === 'media' || status === 'live' || status === 'rescue' || status === 'slate';
-  const isIdle = status === 'idle' || status === 'off' || status === 'stopped' || status === null;
+  // now_playing states: media, live, rescue, slate, idle
+  // orchestrator states: running, stopped, starting, stopping
+  const isPlaying = ['media', 'live', 'rescue', 'slate', 'running'].includes(status);
+  const isIdle = ['idle', 'off', 'stopped'].includes(status) || status === null;
   const statusLabel = status
     ? status.charAt(0).toUpperCase() + status.slice(1)
     : 'Unknown';
