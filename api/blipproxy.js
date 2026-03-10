@@ -147,9 +147,21 @@ export default async function handler(request, response) {
   if (request.method === 'OPTIONS') return response.status(200).end();
 
   // Get target path from query param (set by Vercel rewrite)
+  // The rewrite /blipproxy/:path* → /api/blipproxy?p=/:path* puts the path
+  // in `p`, but any original query params (e.g. ?feed_id=1) become separate
+  // query params on the serverless function URL. We must reconstruct them.
   let targetPath = request.query.p || '/';
   // Ensure leading slash
   if (!targetPath.startsWith('/')) targetPath = '/' + targetPath;
+
+  // Forward any additional query params (everything except 'p')
+  const extraParams = Object.entries(request.query)
+    .filter(([k]) => k !== 'p')
+    .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
+    .join('&');
+  if (extraParams) {
+    targetPath += (targetPath.includes('?') ? '&' : '?') + extraParams;
+  }
 
   // Collect body
   let body = null;
