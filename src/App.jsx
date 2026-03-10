@@ -61,6 +61,7 @@ export default function App() {
         onRefreshIntervalChange={setRefreshInterval}
         prefetchStatus={prefetchStatus}
         blipAuthStatus={blipAuthStatus}
+        onGoHome={goHome}
       />
 
       <main className="dashboard">

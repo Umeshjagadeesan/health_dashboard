@@ -9,6 +9,7 @@ export default function TopBar({
   onRefreshIntervalChange,
   prefetchStatus,
   blipAuthStatus,
+  onGoHome,
 }) {
   const isPrefetching = prefetchStatus && !prefetchStatus.complete && prefetchStatus.total > 0;
 
@@ -19,7 +20,7 @@ export default function TopBar({
   return (
     <header className="top-bar">
       <div className="top-bar-left">
-        <div className="logo">
+        <div className="logo" onClick={onGoHome} style={{ cursor: 'pointer' }} title="Go to Home">
           <div className="logo-icon">
             <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
               <rect width="28" height="28" rx="6" fill="url(#grad1)" />
