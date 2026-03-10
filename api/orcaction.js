@@ -47,11 +47,8 @@ async function sendEmail(action, feedCode, playerId, httpStatus) {
     `Player action: ${action.toUpperCase()}`,
     `Feed code:     ${feedCode}`,
     `Player ID:     ${playerId}`,
-    `HTTP status:   ${httpStatus}`,
-    `Triggered by:  ${BLIP_EMAIL}`,
-    `Time:          ${new Date().toISOString()}`,
-    '',
-    `Orchestrator: ${ORC_BASE}/pocs/api/v1/feeds/${feedCode}/players/${playerId}`,
+    `Triggered by:  ${BLIP_EMAIL}`
+    
   ].join('\n');
 
   await transporter.sendMail({
