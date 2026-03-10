@@ -88,71 +88,7 @@ function HeadendControl({ feedCode, headend, onStatusChange }) {
     }
   }, [feedCode, orcPlayerId]);
 
-  // Fetch initial status on mount — orchestrator is the source of truth
-  useEffect(() => {
-    refreshStatus();
-  }, [refreshStatus]);
-
-  // Poll status while busy (action in progress)
-  useEffect(() => {
-    if (busy) {
-      pollRef.current = setInterval(() => {
-        refreshStatus().then(() => {
-          if (!mountedRef.current) return;
-          // Stop polling once status settles
-          setBusy((prev) => {
-            // Keep busy until the state actually changes from the transitional state
-            return prev;
-          });
-        });
-      }, 5000);
-    } else {
-      if (pollRef.current) clearInterval(pollRef.current);
-    }
-    return () => { if (pollRef.current) clearInterval(pollRef.current); };
-  }, [busy, refreshStatus]);
-
-  const handleStart = async () => {
-    setBusy(true);
-    setError(null);
-    const res = await startPlayer(feedCode, orcPlayerId);
-    if (!mountedRef.current) return;
-    if (!res.ok) {
-      setError(res.error);
-      setBusy(false);
-      return;
-    }
-    // Poll for status update — give the player time to boot
-    setTimeout(async () => {
-      await refreshStatus();
-      if (mountedRef.current) {
-        setBusy(false);
-        onStatusChange?.();
-      }
-    }, 8000);
-  };
-
-  const handleStop = async () => {
-    setBusy(true);
-    setError(null);
-    const res = await stopPlayer(feedCode, orcPlayerId);
-    if (!mountedRef.current) return;
-    if (!res.ok) {
-      setError(res.error);
-      setBusy(false);
-      return;
-    }
-    // Poll for status update
-    setTimeout(async () => {
-      await refreshStatus();
-      if (mountedRef.current) {
-        setBusy(false);
-        onStatusChange?.();
-      }
-    }, 8000);
-  };
-
-  // Derive display info
+  // Derive display info (must be before effects that use them)
   // orchestrator states: running, stopped, starting, stopping
   // now_playing states:  media, live, rescue, slate, idle
   const isPlaying = ['media', 'live', 'rescue', 'slate', 'running'].includes(status);
@@ -170,6 +106,62 @@ function HeadendControl({ feedCode, headend, onStatusChange }) {
       : isTransitioning
         ? 'var(--warning)'
         : 'var(--text-secondary)';
+
+  // Fetch initial status on mount — orchestrator is the source of truth
+  useEffect(() => {
+    refreshStatus();
+  }, [refreshStatus]);
+
+  // Poll status while busy — every 3s, stops automatically when status settles
+  useEffect(() => {
+    if (!busy) {
+      if (pollRef.current) clearInterval(pollRef.current);
+      return;
+    }
+    pollRef.current = setInterval(async () => {
+      await refreshStatus();
+    }, 3000);
+    return () => { if (pollRef.current) clearInterval(pollRef.current); };
+  }, [busy, refreshStatus]);
+
+  // Auto-stop busy when status settles to a final state (running/stopped)
+  useEffect(() => {
+    if (busy && (isPlaying || isIdle)) {
+      setBusy(false);
+      onStatusChange?.();
+    }
+  }, [status]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleStart = async () => {
+    setBusy(true);
+    setError(null);
+    setStatus('starting');
+    const res = await startPlayer(feedCode, orcPlayerId);
+    if (!mountedRef.current) return;
+    if (!res.ok) {
+      setError(res.error);
+      setBusy(false);
+      refreshStatus();
+      return;
+    }
+    // First check after 3s — polling will continue until status settles
+    setTimeout(() => refreshStatus(), 3000);
+  };
+
+  const handleStop = async () => {
+    setBusy(true);
+    setError(null);
+    setStatus('stopping');
+    const res = await stopPlayer(feedCode, orcPlayerId);
+    if (!mountedRef.current) return;
+    if (!res.ok) {
+      setError(res.error);
+      setBusy(false);
+      refreshStatus();
+      return;
+    }
+    setTimeout(() => refreshStatus(), 3000);
+  };
 
   return (
     <div className="headend-control">
