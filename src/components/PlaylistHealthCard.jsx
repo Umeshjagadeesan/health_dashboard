@@ -1,15 +1,32 @@
 import React from 'react';
 import { Card, CardHeader, CardBody } from './Card';
-import { Placeholder } from './DataDisplay';
+import { Placeholder, CardLoading } from './DataDisplay';
 import { parsePrometheusForFeed } from '../utils/helpers';
 
-export default function PlaylistHealthCard({ data, feedCode }) {
+export default function PlaylistHealthCard({ data, feedCode, isLoading }) {
   if (!data) return null;
 
   const ps = data.playlistStatus;
+  const notFetched = !ps;
+
+  // Detect error responses like {"error": "Feed not found"}
+  if (ps?.ok && ps.data?.error) {
+    return (
+      <Card id="playlist-health">
+        <CardHeader icon="📋" title="Playlist Status" badge="N/A" badgeClass="" />
+        <CardBody>
+          <Placeholder text={`Playlist not available: ${ps.data.error}`} />
+        </CardBody>
+      </Card>
+    );
+  }
+
   const hasData = ps?.ok && typeof ps.data === 'object';
 
   // Parse playlist availability from prometheus metrics
+  // Source: /v1/api/metrics/asset (global Prometheus endpoint, fetched via blip session)
+  // This metric is only exported for feeds that have playlist monitoring enabled,
+  // so it shows for some feeds but not others — that's expected.
   const metricsText = data.metricsAsset?.ok ? data.metricsAsset.data : null;
   const plAvail = feedCode && typeof metricsText === 'string'
     ? parsePrometheusForFeed(metricsText, feedCode).filter(m => m.name === 'playlist_available')
@@ -22,7 +39,7 @@ export default function PlaylistHealthCard({ data, feedCode }) {
   const hasWarnings = hasData && Object.values(ps.data).some(d => d.warnings);
   const hasErrors = hasData && Object.values(ps.data).some(d => d.errors);
 
-  let badgeText = 'NO DATA';
+  let badgeText = (notFetched && isLoading) ? '' : 'NO DATA';
   let badgeClass = '';
   if (hasData) {
     if (hasErrors) { badgeText = 'ERRORS'; badgeClass = 'danger'; }
@@ -34,7 +51,9 @@ export default function PlaylistHealthCard({ data, feedCode }) {
     <Card id="playlist-health">
       <CardHeader icon="📋" title="Playlist Status" badge={badgeText} badgeClass={badgeClass} />
       <CardBody>
-        {!hasData ? (
+        {notFetched && isLoading ? (
+          <CardLoading />
+        ) : !hasData ? (
           <Placeholder text="No playlist data available" />
         ) : (
           <>
@@ -45,7 +64,7 @@ export default function PlaylistHealthCard({ data, feedCode }) {
                 return (
                   <div key={date} className={`pl-day ${stateClass}${isToday ? ' today' : ''}`}>
                     <div className="pl-day-date">{formatShortDate(date)}</div>
-                    <div className="pl-day-state">{info.state}</div>
+                    <div className="pl-day-state">{info.state || '--'}</div>
                     <div className="pl-day-version">{info.version || ''}</div>
                     {info.warnings && <span className="pl-day-flag warn">⚠</span>}
                     {info.errors && <span className="pl-day-flag err">✕</span>}

@@ -1,9 +1,9 @@
 import React from 'react';
 import { Card, CardHeader, CardBody } from './Card';
-import { Placeholder, StatusIndicator, DeviceGrid } from './DataDisplay';
+import { Placeholder, StatusIndicator, DeviceGrid, CardLoading } from './DataDisplay';
 import { parsePrometheusForFeed } from '../utils/helpers';
 
-export default function HeadendHealthCard({ data, feedCode }) {
+export default function HeadendHealthCard({ data, feedCode, isLoading }) {
   if (!data) return null;
 
   // Parse device agent health from prometheus metrics
@@ -29,7 +29,10 @@ export default function HeadendHealthCard({ data, feedCode }) {
   const healthyCount = daHealth.filter(m => m.value >= 1).length;
   const totalCount = daHealth.length;
 
-  const badgeText = totalCount > 0 ? `${healthyCount}/${totalCount} HEALTHY` : 'NO DATA';
+  // Still loading if we don't have metrics or device data yet
+  const notFetchedYet = !data.metricsStatus && !data.devices;
+
+  const badgeText = totalCount > 0 ? `${healthyCount}/${totalCount} HEALTHY` : (notFetchedYet && isLoading) ? '' : 'NO DATA';
   const badgeClass = totalCount > 0
     ? (healthyCount === totalCount ? 'success' : healthyCount > 0 ? 'warning' : 'danger')
     : '';
@@ -38,7 +41,9 @@ export default function HeadendHealthCard({ data, feedCode }) {
     <Card id="headend-health">
       <CardHeader icon="🖧" title="Headend & Device Health" badge={badgeText} badgeClass={badgeClass} />
       <CardBody>
-        {totalCount === 0 && devices.length === 0 ? (
+        {notFetchedYet && isLoading ? (
+          <CardLoading />
+        ) : totalCount === 0 && devices.length === 0 ? (
           <Placeholder text="No headend metrics available for this feed" />
         ) : (
           <>

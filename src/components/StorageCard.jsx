@@ -1,20 +1,21 @@
 import React from 'react';
 import { Card, CardHeader, CardBody } from './Card';
-import { StatGrid, StatItem, Placeholder, ProgressBar } from './DataDisplay';
+import { StatGrid, StatItem, Placeholder, ProgressBar, CardLoading } from './DataDisplay';
 import { formatBytes } from '../utils/helpers';
 
-export default function StorageCard({ data }) {
+export default function StorageCard({ data, isLoading }) {
   if (!data) return null;
 
   const st = data.feedStorage;
+  const notFetched = !st;
   const hasData = st?.ok && st.data;
 
   if (!hasData) {
     return (
       <Card id="storage">
-        <CardHeader icon="💾" title="Storage" badge="NO DATA" />
+        <CardHeader icon="💾" title="Storage" badge={notFetched && isLoading ? '' : 'NO DATA'} />
         <CardBody>
-          <Placeholder text="No storage data available for this feed." />
+          {notFetched && isLoading ? <CardLoading /> : <Placeholder text="No storage data available for this feed." />}
         </CardBody>
       </Card>
     );

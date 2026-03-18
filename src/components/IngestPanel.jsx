@@ -252,6 +252,12 @@ function getRelay(ingest) {
   return null;
 }
 
+function getSourceStreamUrl(ingest) {
+  const eps = ingest.servo?.end_points;
+  if (Array.isArray(eps) && eps.length > 0) return eps[0].source_stream_url || null;
+  return null;
+}
+
 function getRelayStatus(ingest) {
   const relay = getRelay(ingest);
   return relay?.status || 'UNKNOWN';
@@ -334,8 +340,8 @@ function IngestDetail({ ingest }) {
       {servo && Array.isArray(servo.media_info) && servo.media_info.length > 0 && (
         <DetailSection title="Media Info">
           <div className="kv-list compact">
-            {servo.media_info[0].elic_name && (
-              <KV label="ELIC" value={servo.media_info[0].elic_name} />
+            {getSourceStreamUrl(ingest) && (
+              <KV label="Endpoint" value={truncate(getSourceStreamUrl(ingest), 55)} mono />
             )}
             {servo.media_info[0].pcr_pid !== undefined && (
               <KV label="PCR PID" value={servo.media_info[0].pcr_pid} />
@@ -343,15 +349,6 @@ function IngestDetail({ ingest }) {
             {Array.isArray(servo.media_info[0].tracks) && servo.media_info[0].tracks.map((track, i) => (
               <TrackRow key={i} index={i + 1} track={track} />
             ))}
-          </div>
-        </DetailSection>
-      )}
-
-      {/* Endpoint from ePub stream_url */}
-      {epub && epub.stream_url && (
-        <DetailSection title="Stream Endpoint">
-          <div className="kv-list compact">
-            <KV label="URL" value={truncate(epub.stream_url, 55)} mono />
           </div>
         </DetailSection>
       )}

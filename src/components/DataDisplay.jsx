@@ -39,6 +39,15 @@ export function Placeholder({ text }) {
   return <div className="placeholder-text">{text}</div>;
 }
 
+export function CardLoading({ text = 'Loading data…' }) {
+  return (
+    <div className="card-loading">
+      <span className="mini-spinner" />
+      <span>{text}</span>
+    </div>
+  );
+}
+
 export function SectionTitle({ children }) {
   return <div className="card-section-title">{children}</div>;
 }

@@ -6,7 +6,7 @@ import MediaLibraryCard from './MediaLibraryCard';
 import HeadendHealthCard from './HeadendHealthCard';
 import StorageCard from './StorageCard';
 // import LiveEventsCard from './LiveEventsCard'; // Commented out – not needed for now
-import VersionCard from './VersionCard';
+// VersionCard removed — replaced by MediaLibraryCard in row 2
 import ErrorsActivityCard from './ErrorsActivityCard';
 import IngestCard from './IngestCard';
 import PlayerControls from './PlayerControls';
@@ -28,6 +28,13 @@ export default function FeedDetailView({
   // Extract headends from now_playing for PlayerControls
   const np = channelData?.nowPlaying;
   const headends = np?.ok && Array.isArray(np.data) ? np.data : [];
+
+  // Determine if data is still being fetched (summary or loading)
+  const isSummary = channelData?._meta?._summary === true;
+  const isLoading = channelLoading || isSummary;
+
+  // Has any ingests for this account?
+  const hasIngests = accountIngests && accountIngests.length > 0;
 
   return (
     <div className="feed-detail">
@@ -75,28 +82,27 @@ export default function FeedDetailView({
       {/* ── Detail Cards Grid ── */}
       <div className="grid-layout">
         {/* Row 1: Now Playing (full width) */}
-        <NowPlayingCard data={mergedData} />
+        <NowPlayingCard data={mergedData} isLoading={isLoading} />
 
-        {/* Row 2: Playlist + Version */}
-        <PlaylistHealthCard data={mergedData} feedCode={selectedChannel} />
-        <VersionCard data={mergedData} accountChannels={account.channels} />
+        {/* Row 2: Playlist + Media Library */}
+        <PlaylistHealthCard data={mergedData} feedCode={selectedChannel} isLoading={isLoading} />
+        <MediaLibraryCard data={mergedData} isLoading={isLoading} />
 
-        {/* Ingest Card (full width) */}
-        <IngestCard ingests={accountIngests} />
+        {/* Ingest Card (full width) — only show if account has ingests */}
+        {hasIngests && <IngestCard ingests={accountIngests} />}
 
-        {/* Row 3: Asset Downloads + Media Library */}
-        <AssetDownloadCard data={mergedData} />
-        <MediaLibraryCard data={mergedData} />
+        {/* Row 3: Asset Downloads + Headend Health */}
+        <AssetDownloadCard data={mergedData} isLoading={isLoading} />
+        <HeadendHealthCard data={mergedData} feedCode={selectedChannel} isLoading={isLoading} />
 
-        {/* Row 4: Headend Health + Storage */}
-        <HeadendHealthCard data={mergedData} feedCode={selectedChannel} />
-        <StorageCard data={mergedData} />
+        {/* Row 4: Storage */}
+        <StorageCard data={mergedData} isLoading={isLoading} />
 
         {/* Live Events & Apex – commented out for now */}
         {/* <LiveEventsCard data={mergedData} /> */}
 
         {/* Errors & Activity (full width) */}
-        <ErrorsActivityCard data={mergedData} />
+        <ErrorsActivityCard data={mergedData} isLoading={isLoading} />
       </div>
     </div>
   );

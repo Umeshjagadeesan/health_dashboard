@@ -1,0 +1,185 @@
+================================================================================
+  CloudPort Health Dashboard — Complete API Endpoint Reference
+================================================================================
+
+All REST calls go through /blipproxy (session-authenticated via _blip_session)
+except orchestrator calls (/orcproxy, /orcaction).
+
+Base URL: https://pocs.demo.amagi.tv
+
+
+================================================================================
+  GLOBAL (Top-Level, called once on app load)
+================================================================================
+
+  fetchGlobalData():
+
+  1.  GET /status
+      → CloudPort server status
+
+  2.  GET /api/v2/status/version
+      → Playout version info
+
+  3.  GET /v1/api/metrics/asset
+      → Prometheus asset metrics
+
+  4.  GET /v1/api/metrics/status
+      → Prometheus device_agent_health metrics
+
+  5.  GET /devices.json
+      → Device list (headends, timezones, types)
+
+  6.  GET /v1/api/monitor?feed_id=1
+      → Feed code → numeric ID mapping (all 42 feeds)
+
+
+================================================================================
+  GLOBAL — INGEST DATA (called once on app load)
+================================================================================
+
+  fetchIngestData():
+
+  7.  GET /servo/api/v2/ingests
+      → Servo ingest status (relay, bitrate, media info, end_points)
+
+  8.  GET /epub/v1/api/ingests
+      → ePub ingest config (stream_url, protocol, codec, resolution)
+
+  9.  GET /epub/v1/api/templates
+      → ePub templates (account name → ingest label mapping)
+
+
+================================================================================
+  SUMMARY PREFETCH (per feed, background — lightweight)
+================================================================================
+
+  fetchFeedSummary(feedCode, numericId):
+
+  10. GET /api/v2/feeds/{feedCode}/playlist/status
+      → Playlist health (calendar, available/missing days)
+
+  11. GET /api/v2/feeds/{feedCode}/current_running_show
+      → Current running show info
+
+  12. GET /v1/api/feeds/{numericId}/now_playing
+      → Now Playing (headends, state, media, live_url)
+
+
+================================================================================
+  FULL FEED DETAIL (per feed, on-demand when user clicks)
+================================================================================
+
+  fetchFeedData(feedCode, numericId):
+
+  13. GET /api/v2/feeds/{feedCode}/playlist/status
+      → Playlist Health card
+
+  14. GET /api/v2/feeds/{feedCode}/current_running_show
+      → Now Playing – current show
+
+  15. GET /api/v2/feeds/{feedCode}/playout_channel
+      → Playout channel configuration
+
+  16. GET /v1/api/feeds/{numericId}/now_playing
+      → Now Playing card (headends, state, media, live preview URL)
+
+  17. GET /v1/api/feeds/{numericId}/storage
+      → Storage card
+
+  18. GET /v1/api/feeds/{numericId}/errors
+      → Errors & Activity card (errors)
+
+  19. GET /v1/api/feeds/{numericId}/activity_log
+      → Errors & Activity card (activity log)
+
+  20. GET /v1/api/headend/{numericId}/status
+      → Headend Health card
+
+  21. GET /v1/api/media/count?feed_id={numericId}
+      → Media Library card (state counts)
+
+  22. GET /v1/api/headend/download_status?feed_id={numericId}
+      → Asset Download card
+
+  23. GET /v1/api/headend/download_history?feed_id={numericId}
+      → Asset Download card (download history)
+
+  24. GET /api/v2/feeds/{feedCode}/shows/{showId}/playout
+      → Show playout details (conditional — only if current show exists)
+
+
+================================================================================
+  ON-CLICK POPUPS (on-demand, user interaction)
+================================================================================
+
+  Media Library — Failed assets popup:
+
+  25. GET /v1/api/media?feed_id={numericId}&state=failed&per_page=50
+      → Failed assets listing (title, error reason)
+
+  26. GET /v1/api/media?feed_id={numericId}&state=qc_failed&per_page=50
+      → QC Failed assets listing (title, error reason)
+
+  27. GET /v1/api/media?feed_id={numericId}&state=invalid&per_page=50
+      → Invalid assets listing (title, error reason)
+
+
+================================================================================
+  ORCHESTRATOR — PLAYER CONTROLS
+================================================================================
+
+  28. GET /orcproxy/pocs/api/v1/feeds/{feedCode}/players/{headendCode}
+      → Player status (running / stopped / starting / stopping)
+
+  29. POST /orcaction
+      Body: { "action": "start", "feedCode": "...", "playerId": "..." }
+      → Start player + send email notification
+
+  30. POST /orcaction
+      Body: { "action": "stop", "feedCode": "...", "playerId": "..." }
+      → Stop player + send email notification
+
+
+================================================================================
+  AUTH
+================================================================================
+
+  31. GET /blipauth/status
+      → Check blip session authentication status
+      → Returns: { hasSession, sessionAge, jwtExpiry, mode }
+
+
+================================================================================
+  LIVE PREVIEW — JANUS WebRTC (not REST — direct connections)
+================================================================================
+
+  32. Ingest Preview (WebSocket transport)
+      Source: servo.end_points[0].low_res_ws_url
+      Format: wss://pocs-trex.demo.amagi.tv/.../janus
+      → Live video preview for ingest streams
+
+  33. Now Playing Preview (HTTP REST transport)
+      Source: headend.live_url (from now_playing API response)
+      Format: https://{device}.demo.amagi.tv/.../janus
+      → Live video preview for playout devices
+
+
+================================================================================
+  PROXY ROUTING
+================================================================================
+
+  Local (Vite dev server):
+    /blipproxy/*  → vite.config.js middleware → forwards to base URL with _blip_session
+    /orcproxy/*   → vite.config.js middleware → forwards to orchestrator API
+    /orcaction    → vite.config.js middleware → orchestrator + email notification
+
+  Production (Vercel):
+    /blipproxy/*  → api/blipproxy.js serverless function
+    /orcproxy/*   → Vercel rewrite to orchestrator API
+    /orcaction    → api/orcaction.js serverless function
+    /blipauth/*   → api/blipauth/status.js serverless function
+
+
+================================================================================
+  TOTAL: 31 REST endpoints + 2 Janus WebRTC connections
+================================================================================

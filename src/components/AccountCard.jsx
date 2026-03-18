@@ -24,9 +24,9 @@ export default function AccountCard({ account, globalData, isCached, onClick }) 
     });
   }
 
-  // ── Device type summary ──
-  const typeSet = new Set(devices.map((d) => d.Type).filter(Boolean));
-  const types = Array.from(typeSet).join(', ');
+  // ── Device timezone summary ──
+  const tzSet = new Set(devices.map((d) => d.TimeZone).filter(Boolean));
+  const timezones = Array.from(tzSet).join(', ');
 
   // ── Status badge logic ──
   let statusBadge;
@@ -73,7 +73,7 @@ export default function AccountCard({ account, globalData, isCached, onClick }) 
 
       <div className="account-meta">
         <span>📦 {devices.length} Device{devices.length !== 1 ? 's' : ''}</span>
-        {types && <span>🏷️ {types}</span>}
+        {timezones && <span>🕐 {timezones}</span>}
       </div>
 
       <div className="account-footer">

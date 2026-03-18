@@ -11,7 +11,7 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
  *
  * Props:
  *  - wsUrl:     Janus URL — either wss:// (WebSocket) or https:// (HTTP REST)
- *  - size:      'small' (flyout, ~200×112) or 'medium' (card, ~320×180)
+ *  - size:      'small' (flyout), 'medium' (card), or 'large' (now-playing panel)
  *  - autoPlay:  if true, connect immediately; otherwise show a play button
  */
 export default function LivePreview({ wsUrl, size = 'small', autoPlay = false }) {

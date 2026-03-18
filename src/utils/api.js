@@ -292,9 +292,9 @@ export async function fetchFeedData(feedCode, numericId = null) {
   const feedPromises = {};
 
   // v2 APIs (use feed code)
-  feedPromises.playlistStatus = f(`/api/v2/feeds/${feedCode}/playlist/status`);
-  feedPromises.currentShow = f(`/api/v2/feeds/${feedCode}/current_running_show`);
-  feedPromises.playoutChannel = f(`/api/v2/feeds/${feedCode}/playout_channel`);
+    feedPromises.playlistStatus = f(`/api/v2/feeds/${feedCode}/playlist/status`);
+    feedPromises.currentShow = f(`/api/v2/feeds/${feedCode}/current_running_show`);
+    feedPromises.playoutChannel = f(`/api/v2/feeds/${feedCode}/playout_channel`);
 
   if (numericId) {
     // v1 APIs (need numeric ID)

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Card, CardHeader, CardBody } from './Card';
-import { Placeholder } from './DataDisplay';
+import { Placeholder, CardLoading } from './DataDisplay';
 import { formatDuration, formatTime } from '../utils/helpers';
 import LivePreview, { getNowPlayingJanusUrl } from './LivePreview';
 
@@ -44,11 +44,12 @@ function getHeaderBadge(state) {
   }
 }
 
-export default function NowPlayingCard({ data }) {
+export default function NowPlayingCard({ data, isLoading }) {
   if (!data) return null;
 
   const np = data.nowPlaying;
   const show = data.showPlayout;
+  const notFetched = !np && !show;
 
   const hasNowPlaying = np?.ok && Array.isArray(np.data) && np.data.length > 0;
   const hasShow = show?.ok && show.data;
@@ -56,9 +57,9 @@ export default function NowPlayingCard({ data }) {
   if (!hasNowPlaying && !hasShow) {
     return (
       <Card id="now-playing" wide>
-        <CardHeader icon="▶️" title="Now Playing" badge="NO DATA" />
+        <CardHeader icon="▶️" title="Now Playing" badge={notFetched && isLoading ? '' : 'NO DATA'} />
         <CardBody>
-          <Placeholder text="No now playing data available for this feed." />
+          {notFetched && isLoading ? <CardLoading /> : <Placeholder text="No now playing data available for this feed." />}
         </CardBody>
       </Card>
     );
@@ -77,80 +78,101 @@ export default function NowPlayingCard({ data }) {
 
   // Headend playout data
   const headends = hasNowPlaying ? np.data : [];
-  const activeHeadend = headends.find(h => isPlayingState(h.state));
-  const currentMedia = activeHeadend?.media;
+  const activeIdx = headends.findIndex(h => isPlayingState(h.state));
 
-  const hState = activeHeadend?.state;
+  // State: which headend is selected (default to active, or first)
+  const [selectedIdx, setSelectedIdx] = useState(Math.max(activeIdx, 0));
+
+  // Keep selectedIdx in bounds if headends list changes
+  const safeIdx = selectedIdx < headends.length ? selectedIdx : 0;
+  const selected = headends[safeIdx];
+  const hState = selected?.state;
+  const currentMedia = selected?.media;
   const { badgeText, badgeClass } = getHeaderBadge(hState);
 
   return (
     <Card id="now-playing" wide>
       <CardHeader icon="▶️" title="Now Playing" badge={badgeText} badgeClass={badgeClass} />
       <CardBody>
-        {/* ── Live preview + headend selector ── */}
-        <PreviewWithHeadendSelector headends={headends} activeHeadend={activeHeadend} />
+        <div className="np-side-by-side">
+          {/* ── LEFT: Details ── */}
+          <div className="np-details-panel">
+            <div className="np-info">
+              {isPlayingState(hState) && currentMedia ? (
+                <>
+                  <div className="np-title">{currentMedia.title || 'Unknown Media'}</div>
+                  <div className="np-subtitle">
+                    Show: {showName} ({showType})
+                    {hState && hState !== 'media' && (
+                      <span style={{ marginLeft: 8, fontWeight: 600, textTransform: 'uppercase', color: getStateColor(hState) }}>
+                        — {hState}
+                      </span>
+                    )}
+                  </div>
+                  {hState === 'live' && <span className="np-live-badge">LIVE</span>}
+                  {hState === 'rescue' && <span className="np-live-badge" style={{ background: 'var(--warning)' }}>RESCUE</span>}
+                </>
+              ) : (
+                <>
+                  <div className="np-title">{showName}</div>
+                  <div className="np-subtitle">
+                    Show Type: {showType} &bull; State: {showState}
+                    {hState && hState !== 'idle' && (
+                      <span style={{ marginLeft: 8, fontWeight: 600, textTransform: 'uppercase', color: getStateColor(hState) }}>
+                        — {headendStateLabel(hState)}
+                      </span>
+                    )}
+                  </div>
+                </>
+              )}
 
-        <div className="now-playing-content">
-          <div className="np-info">
-            {currentMedia ? (
-              <>
-                <div className="np-title">{currentMedia.title || 'Unknown Media'}</div>
-                <div className="np-subtitle">
-                  Show: {showName} ({showType})
-                  {hState && hState !== 'media' && (
-                    <span style={{ marginLeft: 8, fontWeight: 600, textTransform: 'uppercase', color: getStateColor(hState) }}>
-                      — {hState}
-                    </span>
-                  )}
-                </div>
-                {hState === 'live' && <span className="np-live-badge">LIVE</span>}
-                {hState === 'rescue' && <span className="np-live-badge" style={{ background: 'var(--warning)' }}>RESCUE</span>}
-              </>
-            ) : (
-              <>
-                <div className="np-title">{showName}</div>
-                <div className="np-subtitle">
-                  Show Type: {showType} &bull; State: {showState}
-                  {hState && hState !== 'idle' && (
-                    <span style={{ marginLeft: 8, fontWeight: 600, textTransform: 'uppercase', color: getStateColor(hState) }}>
-                      — {headendStateLabel(hState)}
-                    </span>
-                  )}
-                </div>
-              </>
-            )}
-            <div className="np-meta">
-              {startTime && (
-                <div className="np-meta-item">
-                  <span className="meta-label">Start</span>
-                  <span className="meta-value">{formatTime(startTime)}</span>
-                </div>
-              )}
-              {endTime && (
-                <div className="np-meta-item">
-                  <span className="meta-label">End</span>
-                  <span className="meta-value">{formatTime(endTime)}</span>
-                </div>
-              )}
-              {duration && (
-                <div className="np-meta-item">
-                  <span className="meta-label">Duration</span>
-                  <span className="meta-value">{formatDuration(duration)}</span>
-                </div>
-              )}
-              {fps && (
-                <div className="np-meta-item">
-                  <span className="meta-label">FPS</span>
-                  <span className="meta-value">{parseFloat(fps).toFixed(2)}</span>
-                </div>
-              )}
-              {itemCount > 0 && (
-                <div className="np-meta-item">
-                  <span className="meta-label">Items</span>
-                  <span className="meta-value">{itemCount}</span>
-                </div>
-              )}
+              <div className="np-meta">
+                {startTime && (
+                  <div className="np-meta-item">
+                    <span className="meta-label">Start</span>
+                    <span className="meta-value">{formatTime(startTime)}</span>
+                  </div>
+                )}
+                {endTime && (
+                  <div className="np-meta-item">
+                    <span className="meta-label">End</span>
+                    <span className="meta-value">{formatTime(endTime)}</span>
+                  </div>
+                )}
+                {duration && (
+                  <div className="np-meta-item">
+                    <span className="meta-label">Duration</span>
+                    <span className="meta-value">{formatDuration(duration)}</span>
+                  </div>
+                )}
+                {fps && (
+                  <div className="np-meta-item">
+                    <span className="meta-label">FPS</span>
+                    <span className="meta-value">{parseFloat(fps).toFixed(2)}</span>
+                  </div>
+                )}
+                {itemCount > 0 && (
+                  <div className="np-meta-item">
+                    <span className="meta-label">Items</span>
+                    <span className="meta-value">{itemCount}</span>
+                  </div>
+                )}
+              </div>
             </div>
+
+            {/* ── Headend cards (clickable to switch preview) ── */}
+            {headends.length > 0 && (
+              <HeadendSelector
+                headends={headends}
+                selectedIdx={safeIdx}
+                onSelect={setSelectedIdx}
+              />
+            )}
+          </div>
+
+          {/* ── RIGHT: Preview ── */}
+          <div className="np-preview-panel">
+            <PreviewArea headend={selected} />
           </div>
         </div>
       </CardBody>
@@ -159,56 +181,82 @@ export default function NowPlayingCard({ data }) {
 }
 
 
-/** Preview area with clickable headend cards */
-function PreviewWithHeadendSelector({ headends, activeHeadend }) {
-  const defaultIdx = activeHeadend
-    ? headends.indexOf(activeHeadend)
-    : 0;
-  const [selectedIdx, setSelectedIdx] = useState(Math.max(defaultIdx, 0));
+/** Preview area — auto-plays for active headend, shows message for stopped */
+function PreviewArea({ headend }) {
+  if (!headend) return null;
 
-  const selected = headends[selectedIdx] || headends[0];
-  const janusUrl = selected ? getNowPlayingJanusUrl(selected) : null;
-  const hasMultiple = headends.length > 1;
+  const isActive = isPlayingState(headend.state);
+  const janusUrl = getNowPlayingJanusUrl(headend);
+
+  // For stopped/idle players → show "not available" message
+  if (!isActive || !janusUrl) {
+    return (
+      <div className="np-preview-unavailable">
+        <div className="np-preview-unavailable-icon">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18" />
+            <line x1="7" y1="2" x2="7" y2="22" />
+            <line x1="17" y1="2" x2="17" y2="22" />
+            <line x1="2" y1="12" x2="22" y2="12" />
+            <line x1="2" y1="7" x2="7" y2="7" />
+            <line x1="2" y1="17" x2="7" y2="17" />
+            <line x1="17" y1="7" x2="22" y2="7" />
+            <line x1="17" y1="17" x2="22" y2="17" />
+          </svg>
+        </div>
+        <div className="np-preview-unavailable-text">Preview not available</div>
+        <div className="np-preview-unavailable-hint">
+          Player is {headend.state || 'stopped'}. Start the player to watch preview.
+        </div>
+      </div>
+    );
+  }
+
+  // Auto-play preview for active players
+  return (
+    <LivePreview
+      key={headend.id || headend.code}
+      wsUrl={janusUrl}
+      size="large"
+      autoPlay={true}
+    />
+  );
+}
+
+
+/** Headend cards — clickable to switch preview */
+function HeadendSelector({ headends, selectedIdx, onSelect }) {
+  if (!headends || headends.length === 0) return null;
 
   return (
-    <>
-      {/* ── Main preview area ── */}
-      {janusUrl && (
-        <div className="np-preview-wrapper">
-          <LivePreview key={selected.id || selectedIdx} wsUrl={janusUrl} size="medium" />
-        </div>
-      )}
-
-      {/* ── Headend cards (original appearance, clickable to switch preview) ── */}
-      {hasMultiple && (
-        <div style={{ marginTop: 16, marginBottom: 12 }}>
-          <div className="card-section-title">HEADENDS</div>
-          <div className="device-grid">
-            {headends.map((h, idx) => {
-              const isOnline = isPlayingState(h.state);
-              const isSelected = idx === selectedIdx;
-              return (
-                <div
-                  key={h.id}
-                  className={`device-card ${isOnline ? 'online' : 'offline'}${h.state === 'rescue' ? ' rescue' : ''}${isSelected ? ' selected' : ''}`}
-                  onClick={() => setSelectedIdx(idx)}
-                  style={{ cursor: 'pointer' }}
-                >
-                  <div className="device-name">{h.code || `Headend ${h.id}`}</div>
-                  <div className="device-detail">
-                    State: <span style={{ color: getStateColor(h.state), fontWeight: 600 }}>{headendStateLabel(h.state)}</span> &bull; Type: {h.playout_type || '--'}
-                  </div>
-                  {h.media && (
-                    <div className="device-detail" style={{ marginTop: 2, color: 'var(--text-primary)' }}>
-                      {h.media.title}
-                    </div>
-                  )}
+    <div className="np-headend-list">
+      <div className="card-section-title" style={{ marginBottom: 8 }}>
+        HEADENDS {headends.length > 1 && <span style={{ color: 'var(--text-muted)', fontWeight: 400, fontSize: 11 }}>(click to switch preview)</span>}
+      </div>
+      <div className="np-headend-grid">
+        {headends.map((h, idx) => {
+          const isOnline = isPlayingState(h.state);
+          const isSelected = idx === selectedIdx;
+          return (
+            <div
+              key={h.id}
+              className={`device-card ${isOnline ? 'online' : 'offline'}${h.state === 'rescue' ? ' rescue' : ''}${isSelected ? ' selected' : ''}`}
+              onClick={() => onSelect(idx)}
+              style={{ cursor: 'pointer' }}
+            >
+              <div className="device-name">{h.code || `Headend ${h.id}`}</div>
+              <div className="device-detail">
+                State: <span style={{ color: getStateColor(h.state), fontWeight: 600 }}>{headendStateLabel(h.state)}</span> &bull; Type: {h.playout_type || '--'}
+              </div>
+              {h.media && (
+                <div className="device-detail" style={{ marginTop: 2, color: 'var(--text-primary)' }}>
+                  {h.media.title}
                 </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-    </>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 }

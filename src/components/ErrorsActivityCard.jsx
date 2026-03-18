@@ -1,13 +1,14 @@
 import React from 'react';
 import { Card, CardHeader, CardBody } from './Card';
-import { Placeholder, SectionTitle, LogList, LogItem } from './DataDisplay';
+import { Placeholder, SectionTitle, LogList, LogItem, CardLoading } from './DataDisplay';
 import { timeAgo } from '../utils/helpers';
 
-export default function ErrorsActivityCard({ data }) {
+export default function ErrorsActivityCard({ data, isLoading }) {
   if (!data) return null;
 
   const errData = data.feedErrors;
   const actData = data.feedActivity;
+  const notFetched = !errData && !actData;
 
   const hasErrors = errData?.ok && errData.data;
   const hasActivity = actData?.ok && actData.data;
@@ -16,8 +17,8 @@ export default function ErrorsActivityCard({ data }) {
   const feedName = hasErrors ? errData.data.feed_name : '';
   const actLog = hasActivity ? (actData.data.log || []) : [];
 
-  const badgeText = errors.length > 0 ? `${errors.length} ERRORS` : 'CLEAN';
-  const badgeClass = errors.length > 0 ? 'danger' : 'success';
+  const badgeText = errors.length > 0 ? `${errors.length} ERRORS` : (notFetched && isLoading) ? '' : 'CLEAN';
+  const badgeClass = errors.length > 0 ? 'danger' : (notFetched && isLoading) ? '' : 'success';
 
   return (
     <Card id="errors-activity" wide>
@@ -28,7 +29,9 @@ export default function ErrorsActivityCard({ data }) {
         badgeClass={badgeClass}
       />
       <CardBody scrollable>
-        {!hasErrors && !hasActivity ? (
+        {notFetched && isLoading ? (
+          <CardLoading />
+        ) : !hasErrors && !hasActivity ? (
           <Placeholder text="No errors or activity data available for this feed." />
         ) : (
           <>

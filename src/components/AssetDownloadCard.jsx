@@ -1,14 +1,15 @@
 import React from 'react';
 import { Card, CardHeader, CardBody } from './Card';
-import { StatGrid, StatItem, Placeholder, ProgressBar, SectionTitle } from './DataDisplay';
+import { StatGrid, StatItem, Placeholder, ProgressBar, SectionTitle, CardLoading } from './DataDisplay';
 import { formatBytes, timeAgo } from '../utils/helpers';
 
-export default function AssetDownloadCard({ data }) {
+export default function AssetDownloadCard({ data, isLoading }) {
   if (!data) return null;
 
   const ds = data.downloadStatus;
   const hasData = ds?.ok && ds.data?.headends;
   const headends = hasData ? ds.data.headends : [];
+  const notFetched = !ds;
 
   let totalAssets = 0, downloaded = 0, pending = 0, downloading = 0;
   headends.forEach(h => {
@@ -19,14 +20,16 @@ export default function AssetDownloadCard({ data }) {
   });
 
   const pct = totalAssets > 0 ? Math.round((downloaded / totalAssets) * 100) : 0;
-  const badgeText = hasData ? `${pct}% SYNCED` : 'NO DATA';
+  const badgeText = hasData ? `${pct}% SYNCED` : (notFetched && isLoading) ? '' : 'NO DATA';
   const badgeClass = hasData ? (pct === 100 ? 'success' : pct > 80 ? 'warning' : 'danger') : '';
 
   return (
     <Card id="asset-download">
       <CardHeader icon="📥" title="Asset Downloads" badge={badgeText} badgeClass={badgeClass} />
       <CardBody>
-        {!hasData ? (
+        {notFetched && isLoading ? (
+          <CardLoading />
+        ) : !hasData ? (
           <Placeholder text="No download data available for this feed." />
         ) : (
           <>
